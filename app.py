@@ -10,9 +10,9 @@ import io
 import zipfile
 import pandas as pd
 
-
+# ══════════════════════════════════════════════════════════════════
 # KONFIGURASI HALAMAN
-
+# ══════════════════════════════════════════════════════════════════
 st.set_page_config(
     page_title="PCA Image Compressor",
     page_icon="✦",
@@ -20,9 +20,9 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-
+# ══════════════════════════════════════════════════════════════════
 # DESIGN SYSTEM — OBSIDIAN DARK + ELECTRIC INDIGO
-
+# ══════════════════════════════════════════════════════════════════
 ACCENT       = "#7c3aed"        # Electric Violet
 ACCENT_LIGHT = "#a78bfa"        # Soft Violet
 ACCENT_GLOW  = "rgba(124,58,237,0.35)"
@@ -385,9 +385,9 @@ hr {{ border-color: {BORDER} !important; margin: 1.5rem 0 !important; }}
 """
 st.markdown(CSS, unsafe_allow_html=True)
 
-
+# ══════════════════════════════════════════════════════════════════
 # MATPLOTLIB DARK THEME SETUP
-
+# ══════════════════════════════════════════════════════════════════
 def setup_plt():
     # Hanya gunakan rcParams yang kompatibel lintas semua versi matplotlib
     safe_params = {
@@ -427,9 +427,9 @@ def setup_plt():
 
 setup_plt()
 
-
+# ══════════════════════════════════════════════════════════════════
 # HELPERS
-
+# ══════════════════════════════════════════════════════════════════
 def pca_compress(channel: np.ndarray, k: int):
     mean          = np.mean(channel, axis=0)
     Xc            = channel - mean
@@ -484,9 +484,9 @@ def quality_badge(psnr):
     else:            return badge("Sedang", "amber")
 
 
-
+# ══════════════════════════════════════════════════════════════════
 # SIDEBAR
-
+# ══════════════════════════════════════════════════════════════════
 with st.sidebar:
     st.markdown(f"""
     <div style="margin-bottom:1.5rem">
@@ -567,9 +567,9 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
 
-
+# ══════════════════════════════════════════════════════════════════
 # EMPTY STATE — LANDING PAGE MINI
-
+# ══════════════════════════════════════════════════════════════════
 if uploaded_file is None:
     st.markdown(f"""
     <div style="min-height:80vh; display:flex; flex-direction:column;
@@ -635,9 +635,9 @@ if k_parse_error or not k_preset:
     """, unsafe_allow_html=True)
     st.stop()
 
-
+# ══════════════════════════════════════════════════════════════════
 # PREP DATA
-
+# ══════════════════════════════════════════════════════════════════
 gambar         = Image.open(uploaded_file)
 mode_citra     = "Grayscale" if gambar.mode == "L" else "Berwarna"
 X_rgb          = np.array(gambar.convert("RGB"),  dtype=np.float32)
@@ -648,9 +648,9 @@ max_k          = X_gray.shape[1]
 k_values       = sorted(set(min(k, max_k) for k in k_preset))
 
 
-
+# ══════════════════════════════════════════════════════════════════
 # HEADER HALAMAN
-
+# ══════════════════════════════════════════════════════════════════
 fn = uploaded_file.name
 st.markdown(f"""
 <div style="display:flex; align-items:center; justify-content:space-between;
@@ -671,9 +671,9 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-
+# ══════════════════════════════════════════════════════════════════
 # TABS
-
+# ══════════════════════════════════════════════════════════════════
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "  📊  EDA Awal  ",
     "  📈  Eigenvalue  ",
@@ -682,9 +682,9 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "  ⬇️  Export  ",
 ])
 
-
+# ──────────────────────────────────────────────
 # TAB 1 — EDA AWAL
-
+# ──────────────────────────────────────────────
 with tab1:
     st.markdown("<br>", unsafe_allow_html=True)
     sec("📊", "Overview Citra")
@@ -749,9 +749,9 @@ with tab1:
         st.pyplot(fig2, use_container_width=True)
         plt.close(fig2)
 
-
+# ──────────────────────────────────────────────
 # TAB 2 — EIGENVALUE
-
+# ──────────────────────────────────────────────
 with tab2:
     st.markdown("<br>", unsafe_allow_html=True)
     sec("📈", "Analisis Eigenvalue & Explained Variance")
@@ -825,9 +825,9 @@ with tab2:
         plt.close(fig4)
 
 
-
+# ──────────────────────────────────────────────
 # KOMPRESI (CACHED)
-
+# ──────────────────────────────────────────────
 @st.cache_data(show_spinner=False)
 def jalankan_kompresi(gray_bytes, k_tuple):
     Xg = np.array(Image.open(io.BytesIO(gray_bytes)).convert("L"), dtype=np.float32)
@@ -852,9 +852,9 @@ with st.spinner("Memproses kompresi untuk semua nilai k…"):
         uploaded_file.getvalue(), tuple(k_values)
     )
 
-
+# ──────────────────────────────────────────────
 # TAB 3 — KOMPRESI
-
+# ──────────────────────────────────────────────
 with tab3:
     st.markdown("<br>", unsafe_allow_html=True)
     sec("🗜️", "Tabel Evaluasi Kompresi")
@@ -943,9 +943,9 @@ with tab3:
     plt.close(fig5)
 
 
-
+# ──────────────────────────────────────────────
 # TAB 4 — EDA PASCA KOMPRESI
-
+# ──────────────────────────────────────────────
 with tab4:
     st.markdown("<br>", unsafe_allow_html=True)
     sec("🔍", "EDA Setelah Kompresi — Detail per k")
@@ -1005,8 +1005,9 @@ with tab4:
         st.markdown(f'<hr style="border-color:{BORDER};margin:1.5rem 0">', unsafe_allow_html=True)
 
 
+# ──────────────────────────────────────────────
 # TAB 5 — EXPORT
-
+# ──────────────────────────────────────────────
 with tab5:
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -1113,7 +1114,7 @@ with tab5:
         key       = "dl_zip",
     )
 
-# ── Footer ──
+# ── Footer ──────────────────────────────────────
 st.markdown(f"""
 <div style="text-align:center; padding:3rem 0 1rem; color:{TEXT_MUTED};
             font-size:0.7rem; letter-spacing:0.06em; text-transform:uppercase">
