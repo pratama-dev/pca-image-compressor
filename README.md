@@ -1,6 +1,6 @@
 # ✦ PCA Image Compressor
 
-> Kompresi citra berbasis **Principal Component Analysis** menggunakan Eigenvalue & Eigenvector — dilengkapi analisis EDA mendalam sebelum dan sesudah kompresi, dengan nilai k yang sepenuhnya dapat dikustomisasi oleh pengguna.
+> Kompresi citra berbasis **Principal Component Analysis** menggunakan Eigenvalue & Eigenvector yang dilengkapi analisis EDA mendalam sebelum dan sesudah kompresi, dengan nilai k yang sepenuhnya dapat dikustomisasi oleh pengguna.
 
 ![Python](https://img.shields.io/badge/Python-3.9+-a78bfa?style=flat-square&logo=python&logoColor=white)
 ![Streamlit](https://img.shields.io/badge/Streamlit-1.32+-7c3aed?style=flat-square&logo=streamlit&logoColor=white)
@@ -11,7 +11,7 @@
 
 ## 📸 Tentang Proyek
 
-**PCA Image Compressor** adalah aplikasi web interaktif yang mengimplementasikan teknik kompresi citra menggunakan *Principal Component Analysis (PCA)* berbasis **Eigenvalue & Eigenvector**. Aplikasi ini dirancang tidak hanya sebagai alat kompresi, tetapi juga sebagai platform analitik visual yang lengkap — mulai dari EDA awal, analisis dekomposisi eigen, evaluasi metrik kualitas, hingga perbandingan hasil kompresi untuk berbagai nilai k.
+**PCA Image Compressor** adalah aplikasi web interaktif yang mengimplementasikan teknik kompresi citra menggunakan *Principal Component Analysis (PCA)* berbasis **Eigenvalue & Eigenvector**. Aplikasi ini dirancang tidak hanya sebagai alat kompresi, tetapi juga sebagai platform analitik visual yang lengkap. Mulai dari EDA awal, analisis dekomposisi eigen, evaluasi metrik kualitas, hingga perbandingan hasil kompresi untuk berbagai nilai k.
 
 Pengguna bebas menentukan sendiri nilai-nilai k yang ingin diuji cukup dengan mengetiknya di sidebar, tanpa batasan pilihan yang sudah ditetapkan.
 
@@ -121,7 +121,7 @@ EDA Pasca Kompresi
 
 ```bash
 # 1. Clone repositori
-git clone https://github.com/username/pca-compressor.git
+git clone https://github.com/pratama-dev/pca-compressor.git
 cd pca-compressor
 
 # 2. (Opsional) Buat virtual environment
@@ -142,7 +142,7 @@ Aplikasi akan terbuka otomatis di browser pada `http://localhost:8501`
 
 ## ☁️ Deploy ke Streamlit Community Cloud
 
-**Gratis — Tidak perlu server sendiri.**
+**Gratis dan Tidak perlu server sendiri.**
 
 ### Langkah Deploy
 
