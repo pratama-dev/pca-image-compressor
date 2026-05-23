@@ -10,12 +10,18 @@ import io
 import zipfile
 import pandas as pd
 
+
+# KONFIGURASI HALAMAN
+
 st.set_page_config(
     page_title="PCA Image Compressor",
     page_icon="✦",
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+
+# DESIGN SYSTEM — OBSIDIAN DARK + ELECTRIC INDIGO
 
 ACCENT       = "#7c3aed"        # Electric Violet
 ACCENT_LIGHT = "#a78bfa"        # Soft Violet
@@ -36,7 +42,7 @@ PLOT_TEXT    = "#a1a1aa"
 
 CSS = f"""
 <style>
-
+/* ── Google Font ── */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
 /* ── Global Reset ── */
@@ -46,13 +52,14 @@ html, body, [class*="css"] {{
     color: {TEXT_PRIMARY} !important;
 }}
 
+/* ── Hide Streamlit chrome ── */
 #MainMenu, footer, header {{ visibility: hidden; }}
 .block-container {{
     padding: 2rem 2.5rem 4rem 2.5rem !important;
     max-width: 1280px !important;
 }}
 
-
+/* ── Scrollbar ── */
 ::-webkit-scrollbar {{ width: 6px; height: 6px; }}
 ::-webkit-scrollbar-track {{ background: {BG_BASE}; }}
 ::-webkit-scrollbar-thumb {{ background: {ACCENT}; border-radius: 99px; }}
@@ -378,15 +385,17 @@ hr {{ border-color: {BORDER} !important; margin: 1.5rem 0 !important; }}
 """
 st.markdown(CSS, unsafe_allow_html=True)
 
+
+# MATPLOTLIB DARK THEME SETUP
+
 def setup_plt():
-    plt.rcParams.update({
+    # Hanya gunakan rcParams yang kompatibel lintas semua versi matplotlib
+    safe_params = {
         "figure.facecolor"    : PLOT_BG,
         "axes.facecolor"      : PLOT_BG,
         "axes.edgecolor"      : "none",
         "axes.labelcolor"     : PLOT_TEXT,
-        "axes.titlecolor"     : TEXT_PRIMARY,
         "axes.titlesize"      : 11,
-        "axes.titleweight"    : "600",
         "axes.labelsize"      : 9,
         "axes.grid"           : True,
         "grid.color"          : PLOT_GRID,
@@ -396,16 +405,30 @@ def setup_plt():
         "xtick.labelsize"     : 8,
         "ytick.labelsize"     : 8,
         "legend.facecolor"    : "#18181b",
-        "legend.edgecolor"    : BORDER,
+        "legend.edgecolor"    : "#27272a",
         "legend.fontsize"     : 8,
-        "legend.labelcolor"   : TEXT_PRIMARY,
         "lines.linewidth"     : 2.2,
         "savefig.facecolor"   : PLOT_BG,
         "savefig.transparent" : False,
         "font.family"         : "sans-serif",
-    })
+    }
+    # axes.titlecolor dan legend.labelcolor baru tersedia di matplotlib >= 3.2 / 3.5
+    # gunakan try/except agar tidak crash di versi lama
+    for key, val in safe_params.items():
+        try:
+            plt.rcParams[key] = val
+        except (ValueError, KeyError):
+            pass
+    for key, val in [("axes.titlecolor", TEXT_PRIMARY), ("legend.labelcolor", TEXT_PRIMARY)]:
+        try:
+            plt.rcParams[key] = val
+        except (ValueError, KeyError):
+            pass
 
 setup_plt()
+
+
+# HELPERS
 
 def pca_compress(channel: np.ndarray, k: int):
     mean          = np.mean(channel, axis=0)
@@ -460,6 +483,9 @@ def quality_badge(psnr):
     elif psnr >= 30: return badge("Baik", "violet")
     else:            return badge("Sedang", "amber")
 
+
+
+# SIDEBAR
 
 with st.sidebar:
     st.markdown(f"""
@@ -541,6 +567,9 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
 
+
+# EMPTY STATE — LANDING PAGE MINI
+
 if uploaded_file is None:
     st.markdown(f"""
     <div style="min-height:80vh; display:flex; flex-direction:column;
@@ -606,6 +635,9 @@ if k_parse_error or not k_preset:
     """, unsafe_allow_html=True)
     st.stop()
 
+
+# PREP DATA
+
 gambar         = Image.open(uploaded_file)
 mode_citra     = "Grayscale" if gambar.mode == "L" else "Berwarna"
 X_rgb          = np.array(gambar.convert("RGB"),  dtype=np.float32)
@@ -615,6 +647,9 @@ ukuran_awal_kb = kb(bytes_asli)
 max_k          = X_gray.shape[1]
 k_values       = sorted(set(min(k, max_k) for k in k_preset))
 
+
+
+# HEADER HALAMAN
 
 fn = uploaded_file.name
 st.markdown(f"""
@@ -636,6 +671,9 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
+
+# TABS
+
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "  📊  EDA Awal  ",
     "  📈  Eigenvalue  ",
@@ -643,6 +681,9 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "  🔍  EDA Pasca  ",
     "  ⬇️  Export  ",
 ])
+
+
+# TAB 1 — EDA AWAL
 
 with tab1:
     st.markdown("<br>", unsafe_allow_html=True)
@@ -707,6 +748,9 @@ with tab1:
         for sp in ['top','right','left','bottom']: ax2.spines[sp].set_visible(False)
         st.pyplot(fig2, use_container_width=True)
         plt.close(fig2)
+
+
+# TAB 2 — EIGENVALUE
 
 with tab2:
     st.markdown("<br>", unsafe_allow_html=True)
@@ -781,6 +825,9 @@ with tab2:
         plt.close(fig4)
 
 
+
+# KOMPRESI (CACHED)
+
 @st.cache_data(show_spinner=False)
 def jalankan_kompresi(gray_bytes, k_tuple):
     Xg = np.array(Image.open(io.BytesIO(gray_bytes)).convert("L"), dtype=np.float32)
@@ -804,6 +851,9 @@ with st.spinner("Memproses kompresi untuk semua nilai k…"):
     hasil_gray, metrik_list, Xg_c, eig_c = jalankan_kompresi(
         uploaded_file.getvalue(), tuple(k_values)
     )
+
+
+# TAB 3 — KOMPRESI
 
 with tab3:
     st.markdown("<br>", unsafe_allow_html=True)
@@ -893,6 +943,9 @@ with tab3:
     plt.close(fig5)
 
 
+
+# TAB 4 — EDA PASCA KOMPRESI
+
 with tab4:
     st.markdown("<br>", unsafe_allow_html=True)
     sec("🔍", "EDA Setelah Kompresi — Detail per k")
@@ -950,6 +1003,9 @@ with tab4:
         st.pyplot(fig6, use_container_width=True)
         plt.close(fig6)
         st.markdown(f'<hr style="border-color:{BORDER};margin:1.5rem 0">', unsafe_allow_html=True)
+
+
+# TAB 5 — EXPORT
 
 with tab5:
     st.markdown("<br>", unsafe_allow_html=True)
@@ -1057,7 +1113,7 @@ with tab5:
         key       = "dl_zip",
     )
 
-# ── Footer ──────────────────────────────────────
+# ── Footer ──
 st.markdown(f"""
 <div style="text-align:center; padding:3rem 0 1rem; color:{TEXT_MUTED};
             font-size:0.7rem; letter-spacing:0.06em; text-transform:uppercase">
