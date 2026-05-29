@@ -1,12 +1,19 @@
 import io
+import zipfile
 from typing import Dict, List, Tuple
 
 import numpy as np
 import pandas as pd
-import plotly.graph_objects as go
 import streamlit as st
 from PIL import Image
 from skimage.metrics import structural_similarity as ssim
+
+try:
+    import plotly.graph_objects as go
+
+    HAS_PLOTLY = True
+except ModuleNotFoundError:
+    HAS_PLOTLY = False
 
 
 st.set_page_config(
@@ -20,7 +27,7 @@ BG_SURFACE = "#111823"
 BG_PANEL = "rgba(255, 255, 255, 0.04)"
 BORDER = "rgba(255, 255, 255, 0.10)"
 TEXT_PRIMARY = "#f4f7fb"
-TEXT_MUTED = "#9aa4b2"
+TEXT_MUTED = "#c5d1e0"
 CYAN = "#22d3ee"
 PURPLE = "#a855f7"
 GREEN = "#22c55e"
@@ -53,9 +60,44 @@ def inject_css() -> None:
         }}
 
         [data-testid="stSidebar"] .block-container {{
-            padding-top: 1.4rem;
+            padding-top: 1.2rem;
             padding-left: 1.1rem;
             padding-right: 1.1rem;
+        }}
+
+        [data-testid="stSidebar"] *,
+        [data-testid="stSidebar"] p,
+        [data-testid="stSidebar"] span,
+        [data-testid="stSidebar"] label,
+        [data-testid="stSidebar"] .stMarkdown,
+        [data-testid="stSidebar"] .stMarkdown p {{
+            color: #e7eef9 !important;
+            opacity: 1 !important;
+        }}
+
+        [data-testid="stSidebar"] h1,
+        [data-testid="stSidebar"] h2,
+        [data-testid="stSidebar"] h3,
+        [data-testid="stSidebar"] h4,
+        [data-testid="stSidebar"] h5,
+        [data-testid="stSidebar"] h6 {{
+            color: {TEXT_PRIMARY} !important;
+            font-weight: 800 !important;
+        }}
+
+        [data-testid="stSidebar"] input::placeholder {{
+            color: #9eb0c4 !important;
+            opacity: 1 !important;
+        }}
+
+        [data-testid="stSidebar"] [data-testid="stFileUploader"] section {{
+            background: rgba(34, 211, 238, 0.05) !important;
+            border: 1.4px dashed rgba(34, 211, 238, 0.35) !important;
+            border-radius: 0.95rem !important;
+        }}
+
+        [data-testid="stSidebar"] [data-baseweb="slider"] {{
+            color: {TEXT_PRIMARY} !important;
         }}
 
         [data-baseweb="tab-list"] {{
@@ -125,7 +167,7 @@ def inject_css() -> None:
 
         .small-note {{
             color: {TEXT_MUTED};
-            font-size: 0.84rem;
+            font-size: 0.86rem;
             line-height: 1.6;
         }}
 
@@ -142,12 +184,6 @@ def inject_css() -> None:
 
         [data-testid="stMetric"] [data-testid="stMetricValue"] {{
             color: {TEXT_PRIMARY};
-        }}
-
-        [data-testid="stFileUploader"] section {{
-            background: rgba(34, 211, 238, 0.04);
-            border: 1.4px dashed rgba(34, 211, 238, 0.35);
-            border-radius: 0.95rem;
         }}
 
         [data-testid="stDownloadButton"] button {{
@@ -171,6 +207,14 @@ def inject_css() -> None:
             padding: 0.8rem 0.95rem;
             background: rgba(255, 255, 255, 0.025);
         }}
+
+        .warning-box {{
+            border: 1px solid rgba(239, 68, 68, 0.28);
+            background: rgba(239, 68, 68, 0.08);
+            border-radius: 0.9rem;
+            padding: 0.8rem 0.95rem;
+            color: #fecaca;
+        }}
         </style>
         """,
         unsafe_allow_html=True,
@@ -179,11 +223,7 @@ def inject_css() -> None:
 
 def to_grayscale_numpy(image: Image.Image) -> np.ndarray:
     rgb = np.array(image.convert("RGB"), dtype=np.float32)
-    gray = (
-        0.2989 * rgb[:, :, 0]
-        + 0.5870 * rgb[:, :, 1]
-        + 0.1140 * rgb[:, :, 2]
-    )
+    gray = 0.2989 * rgb[:, :, 0] + 0.5870 * rgb[:, :, 1] + 0.1140 * rgb[:, :, 2]
     return gray.astype(np.float32)
 
 
@@ -204,16 +244,6 @@ def bytes_to_kb(data: bytes) -> float:
 
 def normalize_uint8(arr: np.ndarray) -> np.ndarray:
     return np.clip(np.rint(arr), 0, 255).astype(np.uint8)
-
-
-def choose_sample_ks(max_k: int, n_points: int = 24) -> List[int]:
-    if max_k <= 1:
-        return [1]
-    n_points = min(n_points, max_k)
-    ks = np.unique(np.linspace(1, max_k, num=n_points, dtype=int)).tolist()
-    if ks[-1] != max_k:
-        ks.append(max_k)
-    return sorted(set(int(k) for k in ks))
 
 
 def compute_metrics(original_uint8: np.ndarray, reconstructed_uint8: np.ndarray) -> Dict[str, float]:
@@ -239,15 +269,14 @@ def explained_variance_ratio(eigenvalues: np.ndarray) -> np.ndarray:
     return (eigenvalues / total).astype(np.float32)
 
 
-def select_best_k(curve_df: pd.DataFrame) -> int:
-    if curve_df.empty:
-        return 1
-    psnr = curve_df["psnr"].replace([np.inf, -np.inf], np.nan).fillna(curve_df["psnr"].max())
-    psnr = (psnr - psnr.min()) / (psnr.max() - psnr.min() + 1e-9)
-    ssim_norm = (curve_df["ssim"] - curve_df["ssim"].min()) / (curve_df["ssim"].max() - curve_df["ssim"].min() + 1e-9)
-    size_norm = (curve_df["compressed_kb"].max() - curve_df["compressed_kb"]) / (curve_df["compressed_kb"].max() - curve_df["compressed_kb"].min() + 1e-9)
-    score = 0.45 * ssim_norm + 0.35 * psnr + 0.20 * size_norm
-    return int(curve_df.loc[score.idxmax(), "k"])
+def choose_sample_ks(max_k: int, n_points: int = 24) -> List[int]:
+    if max_k <= 1:
+        return [1]
+    n_points = min(n_points, max_k)
+    ks = np.unique(np.linspace(1, max_k, num=n_points, dtype=int)).tolist()
+    if ks[-1] != max_k:
+        ks.append(max_k)
+    return sorted(set(int(k) for k in ks))
 
 
 @st.cache_data(show_spinner=False)
@@ -319,10 +348,13 @@ def build_curve(image_bytes: bytes, ks: Tuple[int, ...]) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def plot_scree_plot(eigenvalues: np.ndarray, max_points: int = 40) -> go.Figure:
+def plot_scree_plot(eigenvalues: np.ndarray, max_points: int = 40):
     n = min(max_points, len(eigenvalues))
     x = np.arange(1, n + 1)
     y = eigenvalues[:n]
+
+    if not HAS_PLOTLY:
+        return None
 
     fig = go.Figure()
     fig.add_trace(
@@ -347,7 +379,10 @@ def plot_scree_plot(eigenvalues: np.ndarray, max_points: int = 40) -> go.Figure:
     return fig
 
 
-def plot_cumulative_variance(cumulative: np.ndarray) -> go.Figure:
+def plot_cumulative_variance(cumulative: np.ndarray):
+    if not HAS_PLOTLY:
+        return None
+
     x = np.arange(1, len(cumulative) + 1)
     fig = go.Figure()
     fig.add_trace(
@@ -378,7 +413,10 @@ def plot_cumulative_variance(cumulative: np.ndarray) -> go.Figure:
     return fig
 
 
-def plot_histogram_overlay(original_uint8: np.ndarray, reconstructed_uint8: np.ndarray, title: str) -> go.Figure:
+def plot_histogram_overlay(original_uint8: np.ndarray, reconstructed_uint8: np.ndarray, title: str):
+    if not HAS_PLOTLY:
+        return None
+
     fig = go.Figure()
     fig.add_trace(
         go.Histogram(
@@ -412,7 +450,10 @@ def plot_histogram_overlay(original_uint8: np.ndarray, reconstructed_uint8: np.n
     return fig
 
 
-def plot_metric_curves(curve_df: pd.DataFrame) -> go.Figure:
+def plot_metric_curves(curve_df: pd.DataFrame):
+    if not HAS_PLOTLY:
+        return None
+
     fig = go.Figure()
 
     fig.add_trace(
@@ -463,16 +504,34 @@ def plot_metric_curves(curve_df: pd.DataFrame) -> go.Figure:
 inject_css()
 
 with st.sidebar:
-    st.markdown('<div class="section-label">PCA Image Compression Lab</div>', unsafe_allow_html=True)
-    st.markdown("Upload gambar JPG atau PNG, lalu atur nilai k untuk melihat trade-off kualitas dan ukuran.")
-    uploaded_file = st.file_uploader("Upload image", type=["jpg", "jpeg", "png"], accept_multiple_files=False)
-    st.markdown("---")
     st.markdown(
-        """
-        <div class="small-note">
-        PCA dihitung pada citra grayscale. Eigenvalue dan eigenvector dicache agar perubahan slider k tetap ringan.
-        </div>
-        """,
+        '<div style="font-size:1.2rem;font-weight:800;letter-spacing:-0.02em;color:#f4f7fb;">PCA Image Compression Lab</div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<div style="margin-top:0.35rem;color:#dbe7f5;font-size:0.92rem;line-height:1.6;">Upload gambar JPG atau PNG, lalu atur nilai k untuk melihat trade-off kualitas dan ukuran.</div>',
+        unsafe_allow_html=True,
+    )
+
+    st.markdown("<hr style='border-color: rgba(255,255,255,0.08); margin: 1rem 0;'>", unsafe_allow_html=True)
+    uploaded_file = st.file_uploader(
+        "Upload image",
+        type=["jpg", "jpeg", "png"],
+        accept_multiple_files=False,
+    )
+
+    st.markdown("<div style='height:0.6rem'></div>", unsafe_allow_html=True)
+    st.markdown(
+        '<div style="color:#eaf2ff;font-size:0.74rem;font-weight:700;letter-spacing:0.10em;text-transform:uppercase;margin-bottom:0.4rem;">K Value</div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<div style="color:#b8c4d3;font-size:0.84rem;line-height:1.5;margin-bottom:0.55rem;">Slider ini mengatur jumlah komponen utama yang dipakai saat rekonstruksi.</div>',
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        '<div style="color:#eaf2ff;font-size:0.72rem;font-weight:700;letter-spacing:0.10em;text-transform:uppercase;margin-bottom:0.4rem;">Image details</div>',
         unsafe_allow_html=True,
     )
 
@@ -482,7 +541,7 @@ if uploaded_file is None:
         <div style="min-height:72vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;">
             <div class="hero-title">PCA Image Compression Lab</div>
             <div class="hero-subtitle" style="max-width:720px;">
-                Kompresi citra grayscale berbasis Principal Component Analysis dengan evaluasi MSE, PSNR, SSIM, compression ratio, dan visualisasi interaktif berbasis Plotly.
+                Kompresi citra grayscale berbasis Principal Component Analysis dengan evaluasi MSE, PSNR, SSIM, compression ratio, dan visualisasi interaktif.
             </div>
         </div>
         """,
@@ -499,7 +558,8 @@ original_size_kb = bytes_to_kb(image_bytes)
 max_k = min(pca_result["eigenvectors"].shape[1], pca_result["gray"].shape[1])
 
 if "k_value" not in st.session_state:
-    st.session_state["k_value"] = 1
+    st.session_state["k_value"] = min(8, max_k)
+
 st.session_state["k_value"] = int(np.clip(st.session_state["k_value"], 1, max_k))
 
 with st.sidebar:
@@ -523,7 +583,12 @@ reduction_pct = 100.0 * (1.0 - compressed_size_bytes / original_size_bytes) if o
 
 curve_ks = tuple(choose_sample_ks(max_k=max_k, n_points=24))
 curve_df = build_curve(image_bytes, curve_ks)
-best_k = select_best_k(curve_df)
+best_idx = curve_df["ssim"].idxmax()
+best_k = int(curve_df.loc[best_idx, "k"])
+
+ev_ratio = pca_result["explained_variance_ratio"]
+cumulative = pca_result["cumulative_explained_variance"]
+eigenvalues = pca_result["eigenvalues"]
 
 st.markdown(
     f"""
@@ -539,7 +604,7 @@ st.markdown(
 
 m1, m2, m3, m4 = st.columns(4)
 m1.metric("Original size", f"{original_size_kb:.2f} KB")
-m2.metric("Compressed size", f"{compressed_size_kb:.2f} KB", delta=f"{reduction_pct:.1f}%")
+m2.metric("Compressed size", f"{compressed_size_kb:.2f} KB", delta=f"{reduction_pct:.1f}% smaller", delta_color="inverse")
 m3.metric("Compression ratio", f"{cr:.2f}x")
 m4.metric("Selected k", f"{k_value}", delta=f"Best k: {best_k}")
 
@@ -551,7 +616,7 @@ with tab_overview:
     left, right = st.columns([1.1, 1.0])
 
     with left:
-        st.markdown('<div class="section-label">Image Preview</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-label">Image preview</div>', unsafe_allow_html=True)
         c1, c2 = st.columns(2)
         with c1:
             st.image(Image.open(io.BytesIO(image_bytes)), caption="Original image", use_container_width=True)
@@ -559,11 +624,11 @@ with tab_overview:
             st.image(reconstructed_uint8, caption=f"Reconstructed grayscale, k={k_value}", use_container_width=True)
 
     with right:
-        st.markdown('<div class="section-label">Live Metrics</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-label">Live metrics</div>', unsafe_allow_html=True)
         st.metric("MSE", f"{selected_metrics['mse']:.4f}")
         st.metric("PSNR", f"{selected_metrics['psnr']:.2f} dB")
         st.metric("SSIM", f"{selected_metrics['ssim']:.4f}")
-        st.metric("Compression ratio", f"{cr:.2f}x", delta=f"{reduction_pct:.1f}% smaller")
+        st.metric("Compression ratio", f"{cr:.2f}x", delta=f"{reduction_pct:.1f}% smaller", delta_color="inverse")
 
         st.markdown('<div class="section-label" style="margin-top:1rem;">Quick summary</div>', unsafe_allow_html=True)
         summary_col1, summary_col2 = st.columns(2)
@@ -571,14 +636,14 @@ with tab_overview:
             st.metric("Mean intensity", f"{gray_uint8.mean():.2f}")
             st.metric("Std intensity", f"{gray_uint8.std():.2f}")
         with summary_col2:
-            st.metric("Selected file size", f"{compressed_size_kb:.2f} KB")
+            st.metric("Output size", f"{compressed_size_kb:.2f} KB")
             st.metric("Explained variance", f"{curve_df.loc[curve_df['k'] == k_value, 'explained_variance'].iloc[0]:.2f}%")
 
         st.markdown(
             """
             <div class="tech-box">
                 <div class="small-note">
-                The compressed output is saved as PNG bytes for size evaluation and download. PCA decomposition is cached on the uploaded image bytes, so moving the k slider does not recompute eigenvalue decomposition.
+                PCA decomposition is cached on the uploaded image bytes. Moving the k slider only triggers reconstruction, not a repeated eigen decomposition.
                 </div>
             </div>
             """,
@@ -586,30 +651,33 @@ with tab_overview:
         )
 
 with tab_eigen:
-    st.markdown('<div class="section-label">PCA Decomposition</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-label">PCA decomposition</div>', unsafe_allow_html=True)
     c1, c2, c3, c4 = st.columns(4)
 
-    evr = pca_result["explained_variance_ratio"]
-    cumulative = pca_result["cumulative_explained_variance"]
-    eigenvalues = pca_result["eigenvalues"]
-
     c1.metric("Top eigenvalue", f"{eigenvalues[0]:.4f}")
-    c2.metric("Variance PC1", f"{evr[0] * 100:.2f}%")
+    c2.metric("Variance PC1", f"{ev_ratio[0] * 100:.2f}%")
     c3.metric("Variance at selected k", f"{cumulative[min(k_value, len(cumulative)) - 1] * 100:.2f}%")
     c4.metric("Components for 95%", f"{int(np.argmax(cumulative >= 0.95) + 1)}")
 
     left, right = st.columns(2)
     with left:
-        st.plotly_chart(plot_scree_plot(eigenvalues), use_container_width=True, config={"displayModeBar": True})
+        if HAS_PLOTLY:
+            st.plotly_chart(plot_scree_plot(eigenvalues), use_container_width=True, config={"displayModeBar": True})
+        else:
+            st.warning("Plotly belum tersedia. Tambahkan plotly ke requirements untuk grafik interaktif.")
+            st.bar_chart(pd.DataFrame({"eigenvalue": eigenvalues[:40]}), use_container_width=True)
     with right:
-        st.plotly_chart(plot_cumulative_variance(cumulative), use_container_width=True, config={"displayModeBar": True})
+        if HAS_PLOTLY:
+            st.plotly_chart(plot_cumulative_variance(cumulative), use_container_width=True, config={"displayModeBar": True})
+        else:
+            st.line_chart(pd.DataFrame({"cumulative_variance": cumulative}), use_container_width=True)
 
     with st.expander("Technical details", expanded=False):
         st.markdown(
-            f"""
+            """
             <div class="tech-box">
                 <div class="small-note">
-                PCA is computed on the grayscale matrix after mean centering by column. The covariance matrix is decomposed with eigh, then eigenvalues are sorted in descending order. Reconstruction uses the first k principal components.
+                The image is converted to grayscale using NumPy, centered by column mean, then decomposed using eigenvalue and eigenvector analysis on the covariance matrix. Reconstruction uses the first k components.
                 </div>
                 <div class="small-note" style="margin-top:0.6rem;">
                 X̂ = (X - μ)W<sub>k</sub>W<sub>k</sub><sup>T</sup> + μ
@@ -620,7 +688,7 @@ with tab_eigen:
         )
 
 with tab_compress:
-    st.markdown('<div class="section-label">Selected Reconstruction</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-label">Selected reconstruction</div>', unsafe_allow_html=True)
 
     top_left, top_right = st.columns([1.05, 0.95])
 
@@ -632,21 +700,35 @@ with tab_compress:
         st.metric("MSE", f"{selected_metrics['mse']:.4f}")
         st.metric("PSNR", f"{selected_metrics['psnr']:.2f} dB")
         st.metric("SSIM", f"{selected_metrics['ssim']:.4f}")
-        st.metric("Compression ratio", f"{cr:.2f}x", delta=f"{reduction_pct:.1f}% smaller")
+        st.metric("Compression ratio", f"{cr:.2f}x", delta=f"{reduction_pct:.1f}% smaller", delta_color="inverse")
 
         st.markdown('<div class="section-label" style="margin-top:1rem;">Pixel intensity distribution</div>', unsafe_allow_html=True)
+        if HAS_PLOTLY:
+            st.plotly_chart(
+                plot_histogram_overlay(gray_uint8, reconstructed_uint8, "Original versus reconstructed histogram"),
+                use_container_width=True,
+                config={"displayModeBar": True},
+            )
+        else:
+            st.bar_chart(
+                pd.DataFrame(
+                    {
+                        "original": np.bincount(gray_uint8.flatten(), minlength=256),
+                        "reconstructed": np.bincount(reconstructed_uint8.flatten(), minlength=256),
+                    }
+                ),
+                use_container_width=True,
+            )
+
+    st.markdown('<div class="section-label">Metrics versus k</div>', unsafe_allow_html=True)
+    if HAS_PLOTLY:
         st.plotly_chart(
-            plot_histogram_overlay(gray_uint8, reconstructed_uint8, "Original versus reconstructed histogram"),
+            plot_metric_curves(curve_df),
             use_container_width=True,
             config={"displayModeBar": True},
         )
-
-    st.markdown('<div class="section-label">Metrics versus k</div>', unsafe_allow_html=True)
-    st.plotly_chart(
-        plot_metric_curves(curve_df),
-        use_container_width=True,
-        config={"displayModeBar": True},
-    )
+    else:
+        st.line_chart(curve_df.set_index("k")[["psnr", "ssim"]], use_container_width=True)
 
     st.markdown('<div class="section-label">Comparison table</div>', unsafe_allow_html=True)
     display_df = curve_df.copy()
@@ -677,7 +759,7 @@ with tab_compress:
             """
             <div class="tech-box">
                 <div class="small-note">
-                The PCA decomposition is cached once per uploaded image. Changing k only triggers reconstruction from the cached eigenvectors and scores, which is the fast path.
+                The curve table is built from the cached PCA result. Only the reconstruction step changes when k changes, which keeps interaction responsive.
                 </div>
             </div>
             """,
@@ -685,18 +767,14 @@ with tab_compress:
         )
 
 with tab_export:
-    best_idx = curve_df["ssim"].idxmax()
-    best_row = curve_df.loc[best_idx]
-    recommended_k = int(best_row["k"])
-
     left, right = st.columns([0.95, 1.05])
 
     with left:
         st.markdown('<div class="section-label">Recommended setting</div>', unsafe_allow_html=True)
-        st.metric("Recommended k", f"{recommended_k}")
-        st.metric("Recommended SSIM", f"{float(best_row['ssim']):.4f}")
-        st.metric("Recommended PSNR", f"{float(best_row['psnr']):.2f} dB")
-        st.metric("Recommended size", f"{float(best_row['compressed_kb']):.2f} KB")
+        st.metric("Recommended k", f"{best_k}")
+        st.metric("Recommended SSIM", f"{float(curve_df.loc[curve_df['k'] == best_k, 'ssim'].iloc[0]):.4f}")
+        st.metric("Recommended PSNR", f"{float(curve_df.loc[curve_df['k'] == best_k, 'psnr'].iloc[0]):.2f} dB")
+        st.metric("Recommended size", f"{float(curve_df.loc[curve_df['k'] == best_k, 'compressed_kb'].iloc[0]):.2f} KB")
 
     with right:
         st.markdown('<div class="section-label">Download compressed image</div>', unsafe_allow_html=True)
@@ -709,8 +787,6 @@ with tab_export:
 
         zip_buffer = io.BytesIO()
         with st.spinner("Preparing archive..."):
-            import zipfile
-
             with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
                 for _, row in curve_df.iterrows():
                     k_i = int(row["k"])
@@ -734,7 +810,7 @@ with tab_export:
                         f"{float(row['psnr']):.2f} | {float(row['ssim']):.4f} | {comp_kb:.2f} | {ratio_i:.2f}x"
                     )
                 report_lines.append("")
-                report_lines.append(f"Recommended k: {recommended_k}")
+                report_lines.append(f"Recommended k: {best_k}")
                 zf.writestr("report.txt", "\n".join(report_lines))
 
         zip_buffer.seek(0)
@@ -751,7 +827,7 @@ with tab_export:
             """
             <div class="tech-box">
                 <div class="small-note">
-                Compression ratio is computed from the original file bytes divided by the PNG-encoded reconstructed image bytes. This keeps the metric grounded in actual file size, not only array size.
+                Compression ratio is computed from the original file bytes divided by the reconstructed image bytes encoded as PNG. This keeps the metric grounded in actual file size, not just array size.
                 </div>
             </div>
             """,
