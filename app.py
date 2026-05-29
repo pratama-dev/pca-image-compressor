@@ -1,1124 +1,759 @@
-import streamlit as st
+import io
+from typing import Dict, List, Tuple
+
 import numpy as np
+import pandas as pd
+import plotly.graph_objects as go
+import streamlit as st
 from PIL import Image
 from skimage.metrics import structural_similarity as ssim
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-import matplotlib.ticker as ticker
-import io
-import zipfile
-import pandas as pd
 
-# ══════════════════════════════════════════════════════════════════
-# KONFIGURASI HALAMAN
-# ══════════════════════════════════════════════════════════════════
+
 st.set_page_config(
-    page_title="PCA Image Compressor",
-    page_icon="✦",
+    page_title="PCA Image Compression Lab",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# ══════════════════════════════════════════════════════════════════
-# DESIGN SYSTEM — OBSIDIAN DARK + ELECTRIC INDIGO
-# ══════════════════════════════════════════════════════════════════
-ACCENT       = "#7c3aed"        # Electric Violet
-ACCENT_LIGHT = "#a78bfa"        # Soft Violet
-ACCENT_GLOW  = "rgba(124,58,237,0.35)"
-BG_BASE      = "#09090b"        # True Obsidian
-BG_SURFACE   = "#111113"
-BG_CARD      = "rgba(255,255,255,0.04)"
-BORDER       = "rgba(255,255,255,0.08)"
-TEXT_PRIMARY = "#f4f4f5"
-TEXT_MUTED   = "#71717a"
-SUCCESS      = "#22c55e"
-WARNING      = "#f59e0b"
-DANGER       = "#ef4444"
-
-PLOT_BG      = "#0d0d10"
-PLOT_GRID    = "rgba(255,255,255,0.06)"
-PLOT_TEXT    = "#a1a1aa"
-
-CSS = f"""
-<style>
-/* ── Google Font ── */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-
-/* ── Global Reset ── */
-html, body, [class*="css"] {{
-    font-family: 'Inter', -apple-system, sans-serif !important;
-    background-color: {BG_BASE} !important;
-    color: {TEXT_PRIMARY} !important;
-}}
-
-/* ── Hide Streamlit chrome ── */
-#MainMenu, footer, header {{ visibility: hidden; }}
-.block-container {{
-    padding: 2rem 2.5rem 4rem 2.5rem !important;
-    max-width: 1280px !important;
-}}
-
-/* ── Scrollbar ── */
-::-webkit-scrollbar {{ width: 6px; height: 6px; }}
-::-webkit-scrollbar-track {{ background: {BG_BASE}; }}
-::-webkit-scrollbar-thumb {{ background: {ACCENT}; border-radius: 99px; }}
-
-/* ── Sidebar ── */
-[data-testid="stSidebar"] {{
-    background: {BG_SURFACE} !important;
-    border-right: 1px solid {BORDER} !important;
-}}
-[data-testid="stSidebar"] .block-container {{
-    padding: 1.5rem 1.2rem !important;
-}}
-[data-testid="stSidebarNav"] {{ display: none; }}
-
-/* ── Sidebar labels ── */
-[data-testid="stSidebar"] label,
-[data-testid="stSidebar"] .stMarkdown p {{
-    color: {TEXT_MUTED} !important;
-    font-size: 0.78rem !important;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    font-weight: 500;
-}}
-
-/* ── Sidebar widgets ── */
-[data-testid="stSidebar"] [data-baseweb="select"] > div,
-[data-testid="stSidebar"] [data-baseweb="input"] > div {{
-    background: rgba(255,255,255,0.05) !important;
-    border: 1px solid {BORDER} !important;
-    border-radius: 8px !important;
-    color: {TEXT_PRIMARY} !important;
-}}
-
-/* ── Tabs ── */
-[data-baseweb="tab-list"] {{
-    background: transparent !important;
-    border-bottom: 1px solid {BORDER} !important;
-    gap: 0.25rem;
-    padding-bottom: 0 !important;
-}}
-[data-baseweb="tab"] {{
-    background: transparent !important;
-    border: none !important;
-    border-radius: 8px 8px 0 0 !important;
-    color: {TEXT_MUTED} !important;
-    font-size: 0.82rem !important;
-    font-weight: 500 !important;
-    padding: 0.55rem 1.1rem !important;
-    transition: all 0.2s ease !important;
-    letter-spacing: 0.02em;
-}}
-[data-baseweb="tab"]:hover {{
-    color: {TEXT_PRIMARY} !important;
-    background: rgba(255,255,255,0.04) !important;
-}}
-[aria-selected="true"][data-baseweb="tab"] {{
-    color: {ACCENT_LIGHT} !important;
-    background: rgba(124,58,237,0.12) !important;
-    border-bottom: 2px solid {ACCENT_LIGHT} !important;
-}}
-[data-baseweb="tab-highlight"] {{ display: none !important; }}
-[data-baseweb="tab-border"] {{ display: none !important; }}
-
-/* ── File uploader dropzone ── */
-[data-testid="stFileUploader"] section {{
-    background: rgba(124,58,237,0.05) !important;
-    border: 1.5px dashed rgba(124,58,237,0.4) !important;
-    border-radius: 12px !important;
-    transition: all 0.3s ease !important;
-}}
-[data-testid="stFileUploader"] section:hover {{
-    border-color: {ACCENT_LIGHT} !important;
-    background: rgba(124,58,237,0.10) !important;
-    transform: translateY(-2px);
-    box-shadow: 0 8px 32px {ACCENT_GLOW};
-}}
-[data-testid="stFileUploader"] section svg {{ display: none !important; }}
-[data-testid="stFileUploader"] section > div > p:first-child {{
-    font-size: 0.85rem !important;
-    color: {ACCENT_LIGHT} !important;
-    font-weight: 600 !important;
-}}
-
-/* ── Download buttons ── */
-[data-testid="stDownloadButton"] button {{
-    background: rgba(124,58,237,0.12) !important;
-    border: 1px solid rgba(124,58,237,0.35) !important;
-    color: {ACCENT_LIGHT} !important;
-    border-radius: 8px !important;
-    font-size: 0.78rem !important;
-    font-weight: 500 !important;
-    padding: 0.5rem 0.9rem !important;
-    width: 100% !important;
-    transition: all 0.3s ease !important;
-    letter-spacing: 0.01em;
-}}
-[data-testid="stDownloadButton"] button:hover {{
-    background: rgba(124,58,237,0.25) !important;
-    border-color: {ACCENT_LIGHT} !important;
-    transform: translateY(-3px) !important;
-    box-shadow: 0 8px 24px {ACCENT_GLOW} !important;
-}}
-
-/* ── Spinner ── */
-[data-testid="stSpinner"] {{
-    color: {ACCENT_LIGHT} !important;
-}}
-
-/* ── Text input ── */
-[data-testid="stTextInput"] input {{
-    background: rgba(255,255,255,0.05) !important;
-    border: 1px solid {BORDER} !important;
-    border-radius: 8px !important;
-    color: {TEXT_PRIMARY} !important;
-    font-size: 0.85rem !important;
-    padding: 0.5rem 0.8rem !important;
-    transition: border-color 0.2s ease !important;
-}}
-[data-testid="stTextInput"] input:focus {{
-    border-color: {ACCENT_LIGHT} !important;
-    box-shadow: 0 0 0 2px {ACCENT_GLOW} !important;
-    outline: none !important;
-}}
-[data-testid="stTextInput"] input::placeholder {{
-    color: {TEXT_MUTED} !important;
-    font-size: 0.8rem !important;
-}}
-
-/* ── Slider ── */
-[data-baseweb="slider"] [data-testid="stSlider"] div[role="slider"] {{
-    background: {ACCENT} !important;
-}}
-
-/* ── Divider ── */
-hr {{ border-color: {BORDER} !important; margin: 1.5rem 0 !important; }}
-
-/* ── Metric cards hover (custom) ── */
-.pca-card {{
-    background: {BG_CARD};
-    border: 1px solid {BORDER};
-    border-radius: 12px;
-    padding: 1.1rem 1.3rem;
-    transition: all 0.3s ease;
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    position: relative;
-    overflow: hidden;
-}}
-.pca-card::before {{
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 2px;
-    background: linear-gradient(90deg, {ACCENT}, {ACCENT_LIGHT});
-    opacity: 0;
-    transition: opacity 0.3s ease;
-}}
-.pca-card:hover {{
-    transform: translateY(-4px);
-    border-color: rgba(124,58,237,0.4);
-    box-shadow: 0 12px 40px {ACCENT_GLOW};
-}}
-.pca-card:hover::before {{ opacity: 1; }}
-.pca-card .card-label {{
-    font-size: 0.68rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: {TEXT_MUTED};
-    margin-bottom: 0.35rem;
-}}
-.pca-card .card-value {{
-    font-size: 1.6rem;
-    font-weight: 700;
-    color: {TEXT_PRIMARY};
-    line-height: 1.1;
-}}
-.pca-card .card-sub {{
-    font-size: 0.72rem;
-    color: {TEXT_MUTED};
-    margin-top: 0.3rem;
-}}
-.card-accent {{ color: {ACCENT_LIGHT} !important; }}
-
-/* ── Section header ── */
-.sec-header {{
-    font-size: 0.7rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    color: {TEXT_MUTED};
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    margin-bottom: 1.2rem;
-    margin-top: 0.5rem;
-}}
-.sec-header::after {{
-    content: '';
-    flex: 1;
-    height: 1px;
-    background: {BORDER};
-}}
-
-/* ── Badge ── */
-.badge {{
-    display: inline-block;
-    font-size: 0.65rem;
-    font-weight: 600;
-    letter-spacing: 0.07em;
-    text-transform: uppercase;
-    padding: 0.2rem 0.6rem;
-    border-radius: 99px;
-    border: 1px solid;
-}}
-.badge-violet {{
-    color: {ACCENT_LIGHT};
-    border-color: rgba(124,58,237,0.4);
-    background: rgba(124,58,237,0.12);
-}}
-.badge-green {{
-    color: {SUCCESS};
-    border-color: rgba(34,197,94,0.3);
-    background: rgba(34,197,94,0.08);
-}}
-.badge-amber {{
-    color: {WARNING};
-    border-color: rgba(245,158,11,0.3);
-    background: rgba(245,158,11,0.08);
-}}
-
-/* ── Optimal card ── */
-.optimal-card {{
-    background: linear-gradient(135deg, rgba(124,58,237,0.15), rgba(167,139,250,0.08));
-    border: 1px solid rgba(124,58,237,0.45);
-    border-radius: 16px;
-    padding: 1.8rem 2rem;
-    backdrop-filter: blur(16px);
-    position: relative;
-    overflow: hidden;
-}}
-.optimal-card::after {{
-    content: '✦';
-    position: absolute;
-    right: 1.5rem;
-    top: 1.2rem;
-    font-size: 2.5rem;
-    color: rgba(124,58,237,0.15);
-}}
-
-/* ── Table ── */
-[data-testid="stDataFrame"] {{
-    border: 1px solid {BORDER} !important;
-    border-radius: 10px !important;
-    overflow: hidden !important;
-}}
-[data-testid="stDataFrame"] table {{
-    background: {BG_CARD} !important;
-}}
-[data-testid="stDataFrame"] th {{
-    background: rgba(124,58,237,0.12) !important;
-    color: {ACCENT_LIGHT} !important;
-    font-size: 0.72rem !important;
-    text-transform: uppercase;
-    letter-spacing: 0.07em;
-    font-weight: 600 !important;
-}}
-[data-testid="stDataFrame"] td {{
-    font-size: 0.82rem !important;
-    color: {TEXT_PRIMARY} !important;
-    border-color: {BORDER} !important;
-}}
-
-/* ── Spinner overlay ── */
-@keyframes pca-pulse {{
-    0%, 100% {{ opacity: 1; transform: scale(1); }}
-    50% {{ opacity: 0.5; transform: scale(0.95); }}
-}}
-.pca-loading {{
-    animation: pca-pulse 1.5s ease-in-out infinite;
-    color: {ACCENT_LIGHT};
-    font-size: 0.85rem;
-    font-weight: 500;
-    letter-spacing: 0.05em;
-}}
-
-/* ── Image frame ── */
-.img-frame {{
-    border: 1px solid {BORDER};
-    border-radius: 10px;
-    overflow: hidden;
-    transition: all 0.3s ease;
-    background: {BG_SURFACE};
-}}
-.img-frame:hover {{
-    border-color: rgba(124,58,237,0.4);
-    box-shadow: 0 8px 32px {ACCENT_GLOW};
-}}
-.img-label {{
-    font-size: 0.72rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.09em;
-    color: {TEXT_MUTED};
-    margin-top: 0.5rem;
-    text-align: center;
-}}
-.img-meta {{
-    font-size: 0.7rem;
-    color: {TEXT_MUTED};
-    text-align: center;
-    margin-top: 0.1rem;
-}}
-
-/* ── Alert/info boxes override ── */
-[data-testid="stAlert"] {{
-    background: rgba(124,58,237,0.08) !important;
-    border: 1px solid rgba(124,58,237,0.25) !important;
-    border-radius: 10px !important;
-    color: {TEXT_PRIMARY} !important;
-}}
-</style>
-"""
-st.markdown(CSS, unsafe_allow_html=True)
-
-# ══════════════════════════════════════════════════════════════════
-# MATPLOTLIB DARK THEME SETUP
-# ══════════════════════════════════════════════════════════════════
-def setup_plt():
-    # Hanya gunakan rcParams yang kompatibel lintas semua versi matplotlib
-    safe_params = {
-        "figure.facecolor"    : PLOT_BG,
-        "axes.facecolor"      : PLOT_BG,
-        "axes.edgecolor"      : "none",
-        "axes.labelcolor"     : PLOT_TEXT,
-        "axes.titlesize"      : 11,
-        "axes.labelsize"      : 9,
-        "axes.grid"           : True,
-        "grid.color"          : PLOT_GRID,
-        "grid.linewidth"      : 0.7,
-        "xtick.color"         : PLOT_TEXT,
-        "ytick.color"         : PLOT_TEXT,
-        "xtick.labelsize"     : 8,
-        "ytick.labelsize"     : 8,
-        "legend.facecolor"    : "#18181b",
-        "legend.edgecolor"    : "#27272a",
-        "legend.fontsize"     : 8,
-        "lines.linewidth"     : 2.2,
-        "savefig.facecolor"   : PLOT_BG,
-        "savefig.transparent" : False,
-        "font.family"         : "sans-serif",
-    }
-    # axes.titlecolor dan legend.labelcolor baru tersedia di matplotlib >= 3.2 / 3.5
-    # gunakan try/except agar tidak crash di versi lama
-    for key, val in safe_params.items():
-        try:
-            plt.rcParams[key] = val
-        except (ValueError, KeyError):
-            pass
-    for key, val in [("axes.titlecolor", TEXT_PRIMARY), ("legend.labelcolor", TEXT_PRIMARY)]:
-        try:
-            plt.rcParams[key] = val
-        except (ValueError, KeyError):
-            pass
-
-setup_plt()
-
-# ══════════════════════════════════════════════════════════════════
-# HELPERS
-# ══════════════════════════════════════════════════════════════════
-def pca_compress(channel: np.ndarray, k: int):
-    mean          = np.mean(channel, axis=0)
-    Xc            = channel - mean
-    cov_matrix    = np.cov(Xc, rowvar=False)
-    eigenvalues, eigenvectors = np.linalg.eigh(cov_matrix)
-    sorted_idx    = np.argsort(eigenvalues)[::-1]
-    eigenvalues   = eigenvalues[sorted_idx]
-    eigenvectors  = eigenvectors[:, sorted_idx]
-    W             = eigenvectors[:, :k]
-    Z             = np.dot(Xc, W)
-    reconstructed = np.dot(Z, W.T) + mean
-    return np.clip(reconstructed, 0, 255), eigenvalues
+BG_BASE = "#0b0f14"
+BG_SURFACE = "#111823"
+BG_PANEL = "rgba(255, 255, 255, 0.04)"
+BORDER = "rgba(255, 255, 255, 0.10)"
+TEXT_PRIMARY = "#f4f7fb"
+TEXT_MUTED = "#9aa4b2"
+CYAN = "#22d3ee"
+PURPLE = "#a855f7"
+GREEN = "#22c55e"
+AMBER = "#f59e0b"
+RED = "#ef4444"
 
 
-def hitung_metrik(original, rekon):
-    mse      = np.mean((original - rekon) ** 2)
-    psnr     = float('inf') if mse == 0 else 10 * np.log10((255**2) / mse)
-    ssim_val = ssim(original.astype(np.uint8), rekon.astype(np.uint8), data_range=255)
-    return mse, psnr, ssim_val
+def inject_css() -> None:
+    st.markdown(
+        f"""
+        <style>
+        html, body, [class*="css"] {{
+            background: {BG_BASE} !important;
+            color: {TEXT_PRIMARY} !important;
+        }}
 
+        #MainMenu, footer, header {{
+            visibility: hidden;
+        }}
 
-def to_bytes(arr, fmt="JPEG"):
-    buf = io.BytesIO()
-    Image.fromarray(arr.astype(np.uint8)).save(buf, format=fmt)
-    return buf.getvalue()
+        .block-container {{
+            padding-top: 1.6rem;
+            padding-bottom: 2rem;
+            max-width: 1400px;
+        }}
 
+        [data-testid="stSidebar"] {{
+            background: {BG_SURFACE} !important;
+            border-right: 1px solid {BORDER} !important;
+        }}
 
-def kb(b): return len(b) / 1024
+        [data-testid="stSidebar"] .block-container {{
+            padding-top: 1.4rem;
+            padding-left: 1.1rem;
+            padding-right: 1.1rem;
+        }}
 
+        [data-baseweb="tab-list"] {{
+            gap: 0.35rem;
+            border-bottom: 1px solid {BORDER};
+        }}
 
-def card(label, value, sub="", accent=False):
-    val_cls = 'card-value card-accent' if accent else 'card-value'
-    return f"""
-    <div class="pca-card">
-        <div class="card-label">{label}</div>
-        <div class="{val_cls}">{value}</div>
-        {"<div class='card-sub'>" + sub + "</div>" if sub else ""}
-    </div>"""
+        [data-baseweb="tab"] {{
+            color: {TEXT_MUTED};
+            background: transparent;
+            border-radius: 0.9rem 0.9rem 0 0;
+            padding: 0.65rem 1rem;
+            font-weight: 600;
+        }}
 
+        [aria-selected="true"][data-baseweb="tab"] {{
+            color: {TEXT_PRIMARY};
+            background: linear-gradient(90deg, rgba(34, 211, 238, 0.13), rgba(168, 85, 247, 0.13));
+            border-bottom: 2px solid {CYAN};
+        }}
 
-def sec(icon, title):
-    st.markdown(f'<div class="sec-header">{icon}&nbsp; {title}</div>', unsafe_allow_html=True)
+        .hero-title {{
+            font-size: 2.25rem;
+            font-weight: 800;
+            letter-spacing: -0.04em;
+            line-height: 1.05;
+            margin: 0;
+            background: linear-gradient(90deg, {CYAN}, {PURPLE});
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }}
 
+        .hero-subtitle {{
+            color: {TEXT_MUTED};
+            margin-top: 0.35rem;
+            font-size: 0.93rem;
+            line-height: 1.6;
+        }}
 
-def badge(text, kind="violet"):
-    return f'<span class="badge badge-{kind}">{text}</span>'
+        .panel {{
+            background: {BG_PANEL};
+            border: 1px solid {BORDER};
+            border-radius: 1.1rem;
+            padding: 1rem 1.1rem;
+            position: relative;
+            overflow: hidden;
+        }}
 
+        .panel::before {{
+            content: "";
+            position: absolute;
+            inset: 0 0 auto 0;
+            height: 2px;
+            background: linear-gradient(90deg, {CYAN}, {PURPLE});
+            opacity: 0.95;
+        }}
 
-def quality_badge(psnr):
-    if psnr >= 40:   return badge("Sangat Baik", "green")
-    elif psnr >= 30: return badge("Baik", "violet")
-    else:            return badge("Sedang", "amber")
+        .section-label {{
+            color: {TEXT_MUTED};
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            font-size: 0.72rem;
+            font-weight: 700;
+            margin-bottom: 0.7rem;
+        }}
 
+        .small-note {{
+            color: {TEXT_MUTED};
+            font-size: 0.84rem;
+            line-height: 1.6;
+        }}
 
-# ══════════════════════════════════════════════════════════════════
-# SIDEBAR
-# ══════════════════════════════════════════════════════════════════
-with st.sidebar:
-    st.markdown(f"""
-    <div style="margin-bottom:1.5rem">
-        <div style="font-size:1.3rem; font-weight:800; letter-spacing:-0.02em; color:{TEXT_PRIMARY}">
-            ✦ PCA Compressor
-        </div>
-        <div style="font-size:0.72rem; color:{TEXT_MUTED}; margin-top:0.2rem; letter-spacing:0.05em; text-transform:uppercase">
-            Eigenimage · EDA · Analytics
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+        [data-testid="stMetric"] {{
+            background: {BG_PANEL};
+            border: 1px solid {BORDER};
+            border-radius: 1rem;
+            padding: 0.8rem 0.9rem;
+        }}
 
-    st.markdown(f'<div style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:{TEXT_MUTED};margin-bottom:0.4rem">Upload Citra</div>', unsafe_allow_html=True)
-    uploaded_file = st.file_uploader(
-        "", type=["jpg","jpeg","png","bmp","webp"],
-        help="JPG · PNG · BMP · WebP"
+        [data-testid="stMetric"] label {{
+            color: {TEXT_MUTED} !important;
+        }}
+
+        [data-testid="stMetric"] [data-testid="stMetricValue"] {{
+            color: {TEXT_PRIMARY};
+        }}
+
+        [data-testid="stFileUploader"] section {{
+            background: rgba(34, 211, 238, 0.04);
+            border: 1.4px dashed rgba(34, 211, 238, 0.35);
+            border-radius: 0.95rem;
+        }}
+
+        [data-testid="stDownloadButton"] button {{
+            width: 100%;
+            background: linear-gradient(90deg, rgba(34, 211, 238, 0.12), rgba(168, 85, 247, 0.12));
+            color: {TEXT_PRIMARY};
+            border: 1px solid rgba(34, 211, 238, 0.25);
+            border-radius: 0.85rem;
+            transition: all 0.2s ease;
+        }}
+
+        [data-testid="stDownloadButton"] button:hover {{
+            transform: translateY(-2px);
+            border-color: rgba(168, 85, 247, 0.55);
+            box-shadow: 0 10px 24px rgba(168, 85, 247, 0.12);
+        }}
+
+        .tech-box {{
+            border: 1px solid {BORDER};
+            border-radius: 1rem;
+            padding: 0.8rem 0.95rem;
+            background: rgba(255, 255, 255, 0.025);
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True,
     )
 
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown(f'<div style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:{TEXT_MUTED};margin-bottom:0.4rem">Nilai K — Input Manual</div>', unsafe_allow_html=True)
-    st.markdown(f'<div style="font-size:0.68rem;color:{TEXT_MUTED};margin-bottom:0.5rem;line-height:1.5">Ketik beberapa nilai k dipisah koma.<br>Contoh: <span style="color:{ACCENT_LIGHT};font-weight:600">5, 10, 20, 50, 100</span></div>', unsafe_allow_html=True)
 
-    k_input_raw = st.text_input(
-        "", value="5, 10, 20, 50, 100",
-        placeholder="Contoh: 5, 10, 20, 50, 100",
-        key="k_input",
+def to_grayscale_numpy(image: Image.Image) -> np.ndarray:
+    rgb = np.array(image.convert("RGB"), dtype=np.float32)
+    gray = (
+        0.2989 * rgb[:, :, 0]
+        + 0.5870 * rgb[:, :, 1]
+        + 0.1140 * rgb[:, :, 2]
     )
-
-    # Parse & validasi input
-    k_parse_error = None
-    k_preset      = []
-    try:
-        parts = [p.strip() for p in k_input_raw.split(",") if p.strip()]
-        if not parts:
-            k_parse_error = "Masukkan minimal satu nilai k."
-        else:
-            parsed = []
-            for p in parts:
-                v = int(p)
-                if v < 1:
-                    k_parse_error = f"Nilai k harus ≥ 1 (ditemukan: {v})."
-                    break
-                if v > 2000:
-                    k_parse_error = f"Nilai k terlalu besar (maks 2000, ditemukan: {v})."
-                    break
-                parsed.append(v)
-            if not k_parse_error:
-                k_preset = sorted(set(parsed))
-    except ValueError:
-        k_parse_error = "Format tidak valid. Gunakan angka bulat dipisah koma."
-
-    if k_parse_error:
-        st.markdown(
-            f'<div style="font-size:0.72rem;color:#ef4444;background:rgba(239,68,68,0.08);'
-            f'border:1px solid rgba(239,68,68,0.25);border-radius:8px;padding:0.5rem 0.7rem;margin-top:0.3rem">'
-            f'⚠ {k_parse_error}</div>',
-            unsafe_allow_html=True,
-        )
-    else:
-        st.markdown(
-            f'<div style="font-size:0.7rem;color:#22c55e;background:rgba(34,197,94,0.08);'
-            f'border:1px solid rgba(34,197,94,0.2);border-radius:8px;padding:0.4rem 0.7rem;margin-top:0.3rem">'
-            f'✓ {len(k_preset)} nilai k: {", ".join(str(x) for x in k_preset)}</div>',
-            unsafe_allow_html=True,
-        )
-
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown(f'<div style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:{TEXT_MUTED};margin-bottom:0.4rem">EDA Detail</div>', unsafe_allow_html=True)
-    k_eda_count = st.slider("", 1, min(5, max(len(k_preset) if k_preset else 1, 1)), min(3, max(len(k_preset) if k_preset else 1, 1)))
-
-    st.markdown("<br><hr>", unsafe_allow_html=True)
-    st.markdown(f"""
-    <div style="font-size:0.72rem; color:{TEXT_MUTED}; line-height:1.7">
-        Kompresi citra berbasis <span style="color:{ACCENT_LIGHT}; font-weight:600">PCA</span>
-        menggunakan <span style="color:{ACCENT_LIGHT}; font-weight:600">Eigenvalue</span> &amp;
-        <span style="color:{ACCENT_LIGHT}; font-weight:600">Eigenvector</span>.<br><br>
-        Metrik evaluasi: MSE · PSNR · SSIM · CR
-    </div>
-    """, unsafe_allow_html=True)
-
-# ══════════════════════════════════════════════════════════════════
-# EMPTY STATE — LANDING PAGE MINI
-# ══════════════════════════════════════════════════════════════════
-if uploaded_file is None:
-    st.markdown(f"""
-    <div style="min-height:80vh; display:flex; flex-direction:column;
-                align-items:center; justify-content:center; text-align:center; padding:4rem 2rem;">
-
-        <div style="font-size:3.8rem; margin-bottom:1rem; filter:drop-shadow(0 0 40px {ACCENT_GLOW})">✦</div>
-
-        <h1 style="font-size:3rem; font-weight:800; letter-spacing:-0.04em;
-                   background:linear-gradient(135deg, {TEXT_PRIMARY} 0%, {ACCENT_LIGHT} 100%);
-                   -webkit-background-clip:text; -webkit-text-fill-color:transparent;
-                   margin:0 0 0.6rem 0; line-height:1.1">
-            PCA Image Compressor
-        </h1>
-
-        <p style="font-size:1rem; color:{TEXT_MUTED}; max-width:480px; line-height:1.7; margin-bottom:2.5rem">
-            Kompresi citra berbasis <strong style="color:{ACCENT_LIGHT}">Principal Component Analysis</strong>
-            menggunakan Eigenvalue &amp; Eigenvector — dilengkapi analisis EDA mendalam
-            sebelum dan sesudah kompresi.
-        </p>
-
-        <div style="display:flex; gap:0.6rem; flex-wrap:wrap; justify-content:center; margin-bottom:3rem">
-            {badge("Eigenvalue Analysis","violet")}
-            {badge("PSNR · SSIM · MSE","violet")}
-            {badge("EDA Visual","violet")}
-            {badge("Batch Download","violet")}
-        </div>
-
-        <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:1rem; max-width:600px; width:100%; margin-bottom:3rem">
-            <div class="pca-card" style="text-align:left">
-                <div style="font-size:1.3rem;margin-bottom:0.4rem">📊</div>
-                <div style="font-size:0.8rem;font-weight:600;color:{TEXT_PRIMARY};margin-bottom:0.2rem">EDA Lengkap</div>
-                <div style="font-size:0.7rem;color:{TEXT_MUTED}">Histogram, statistik piksel, dan analisis distribusi intensitas.</div>
-            </div>
-            <div class="pca-card" style="text-align:left">
-                <div style="font-size:1.3rem;margin-bottom:0.4rem">📈</div>
-                <div style="font-size:0.8rem;font-weight:600;color:{TEXT_PRIMARY};margin-bottom:0.2rem">Scree Plot</div>
-                <div style="font-size:0.7rem;color:{TEXT_MUTED}">Visualisasi eigenvalue dan cumulative explained variance.</div>
-            </div>
-            <div class="pca-card" style="text-align:left">
-                <div style="font-size:1.3rem;margin-bottom:0.4rem">🗜️</div>
-                <div style="font-size:0.8rem;font-weight:600;color:{TEXT_PRIMARY};margin-bottom:0.2rem">Multi-k Compress</div>
-                <div style="font-size:0.7rem;color:{TEXT_MUTED}">Uji berbagai nilai k dan bandingkan hasilnya secara visual.</div>
-            </div>
-        </div>
-
-        <div style="font-size:0.78rem;color:{TEXT_MUTED}">
-            ↑ Upload citra di sidebar kiri untuk memulai
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    st.stop()
-
-if k_parse_error or not k_preset:
-    st.markdown(f"""
-    <div style="display:flex;align-items:center;gap:0.8rem;padding:1rem 1.3rem;
-                background:rgba(239,68,68,0.07);border:1px solid rgba(239,68,68,0.2);
-                border-radius:10px;margin-top:1rem">
-        <span style="font-size:1.2rem">⚠️</span>
-        <span style="font-size:0.85rem;color:#fca5a5">
-            {k_parse_error or "Masukkan minimal satu nilai k yang valid di sidebar."}
-        </span>
-    </div>
-    """, unsafe_allow_html=True)
-    st.stop()
-
-# ══════════════════════════════════════════════════════════════════
-# PREP DATA
-# ══════════════════════════════════════════════════════════════════
-gambar         = Image.open(uploaded_file)
-mode_citra     = "Grayscale" if gambar.mode == "L" else "Berwarna"
-X_rgb          = np.array(gambar.convert("RGB"),  dtype=np.float32)
-X_gray         = np.array(gambar.convert("L"),    dtype=np.float32)
-bytes_asli     = uploaded_file.getvalue()
-ukuran_awal_kb = kb(bytes_asli)
-max_k          = X_gray.shape[1]
-k_values       = sorted(set(min(k, max_k) for k in k_preset))
+    return gray.astype(np.float32)
 
 
-# ══════════════════════════════════════════════════════════════════
-# HEADER HALAMAN
-# ══════════════════════════════════════════════════════════════════
-fn = uploaded_file.name
-st.markdown(f"""
-<div style="display:flex; align-items:center; justify-content:space-between;
-            margin-bottom:1.5rem; padding-bottom:1rem; border-bottom:1px solid {BORDER}">
-    <div>
-        <h2 style="font-size:1.5rem; font-weight:800; letter-spacing:-0.03em;
-                   color:{TEXT_PRIMARY}; margin:0 0 0.2rem 0">✦ PCA Image Compressor</h2>
-        <div style="font-size:0.75rem; color:{TEXT_MUTED}">
-            {fn} &nbsp;·&nbsp; {gambar.size[0]} × {gambar.size[1]} px
-            &nbsp;·&nbsp; {ukuran_awal_kb:.1f} KB
-            &nbsp;·&nbsp; {mode_citra}
-        </div>
-    </div>
-    <div style="display:flex;gap:0.5rem;align-items:center">
-        {badge(f"{len(k_values)} nilai k","violet")}
-        {badge(mode_citra.lower(),"green")}
-    </div>
-</div>
-""", unsafe_allow_html=True)
-
-# ══════════════════════════════════════════════════════════════════
-# TABS
-# ══════════════════════════════════════════════════════════════════
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
-    "  📊  EDA Awal  ",
-    "  📈  Eigenvalue  ",
-    "  🗜️  Kompresi  ",
-    "  🔍  EDA Pasca  ",
-    "  ⬇️  Export  ",
-])
-
-# ──────────────────────────────────────────────
-# TAB 1 — EDA AWAL
-# ──────────────────────────────────────────────
-with tab1:
-    st.markdown("<br>", unsafe_allow_html=True)
-    sec("📊", "Overview Citra")
-
-    c1,c2,c3,c4 = st.columns(4)
-    with c1: st.markdown(card("Ukuran", f"{gambar.size[0]}×{gambar.size[1]}", "piksel"), unsafe_allow_html=True)
-    with c2: st.markdown(card("File Asli", f"{ukuran_awal_kb:.1f} KB", "sebelum kompresi"), unsafe_allow_html=True)
-    with c3: st.markdown(card("Mean Piksel", f"{X_gray.mean():.1f}", "intensitas rata-rata", accent=True), unsafe_allow_html=True)
-    with c4: st.markdown(card("Std Dev", f"{X_gray.std():.1f}", "variasi intensitas", accent=True), unsafe_allow_html=True)
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    col_img, col_hist = st.columns([1.2, 1])
-
-    with col_img:
-        sec("🖼️", "Citra Asli vs Grayscale")
-        fig, axes = plt.subplots(1,2, figsize=(10,4.2), tight_layout=True)
-        axes[0].imshow(X_rgb.astype(np.uint8))
-        axes[0].set_title("RGB Original", pad=10)
-        axes[0].axis('off')
-        axes[1].imshow(X_gray, cmap='gray')
-        axes[1].set_title("Grayscale Channel", pad=10)
-        axes[1].axis('off')
-        for sp in axes[0].spines.values(): sp.set_visible(False)
-        for sp in axes[1].spines.values(): sp.set_visible(False)
-        st.pyplot(fig, use_container_width=True)
-        plt.close(fig)
-
-    with col_hist:
-        sec("📉", "Distribusi Intensitas Piksel")
-
-        mn = X_gray.mean()
-        if mn < 85:   kecerahan, b_kec = "Gelap",  "amber"
-        elif mn > 170: kecerahan, b_kec = "Terang", "green"
-        else:          kecerahan, b_kec = "Normal", "violet"
-
-        sd = X_gray.std()
-        if sd < 40:   kontras, b_kon = "Rendah", "amber"
-        elif sd > 80: kontras, b_kon = "Tinggi", "green"
-        else:          kontras, b_kon = "Sedang", "violet"
-
-        st.markdown(
-            f"Kecerahan&nbsp;{badge(kecerahan, b_kec)}&nbsp;&nbsp;"
-            f"Kontras&nbsp;{badge(kontras, b_kon)}",
-            unsafe_allow_html=True
-        )
-        st.markdown("<br>", unsafe_allow_html=True)
-
-        fig2, ax2 = plt.subplots(figsize=(6,3.8), tight_layout=True)
-        ax2.fill_between(range(256),
-            [np.sum(X_gray.flatten() == i) for i in range(256)],
-            alpha=0.25, color=ACCENT_LIGHT)
-        n, bins, patches = ax2.hist(X_gray.flatten(), bins=64,
-                                    color=ACCENT, edgecolor="none", alpha=0.75)
-        ax2.axvline(mn, color="#f59e0b", linestyle='--', linewidth=1.5,
-                    label=f"Mean = {mn:.1f}")
-        ax2.set_xlabel("Intensitas (0–255)")
-        ax2.set_ylabel("Frekuensi")
-        ax2.set_title("Histogram Piksel — Grayscale", pad=10)
-        ax2.legend()
-        for sp in ['top','right','left','bottom']: ax2.spines[sp].set_visible(False)
-        st.pyplot(fig2, use_container_width=True)
-        plt.close(fig2)
-
-# ──────────────────────────────────────────────
-# TAB 2 — EIGENVALUE
-# ──────────────────────────────────────────────
-with tab2:
-    st.markdown("<br>", unsafe_allow_html=True)
-    sec("📈", "Analisis Eigenvalue & Explained Variance")
-
-    with st.spinner("Menghitung dekomposisi eigen…"):
-        k_sample = min(200, X_gray.shape[1])
-        _, eig_all = pca_compress(X_gray, k_sample)
-
-    ev_ratio   = eig_all / np.sum(eig_all)
-    cumulative = np.cumsum(ev_ratio)
-
-    # Top 5 cards
-    cols_ev = st.columns(5)
-    for i in range(min(5, len(eig_all))):
-        with cols_ev[i]:
-            st.markdown(card(f"PC {i+1}", f"{eig_all[i]:,.0f}",
-                             f"{ev_ratio[i]*100:.1f}% variance", accent=(i==0)),
-                        unsafe_allow_html=True)
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    # Threshold table
-    sec("🎯", "Threshold Explained Variance")
-    th_cols = st.columns(4)
-    for idx_t, thr in enumerate([0.80, 0.90, 0.95, 0.99]):
-        k_n = int(np.argmax(cumulative >= thr)) + 1
-        with th_cols[idx_t]:
-            st.markdown(card(
-                f"{int(thr*100)}% Variance",
-                f"k = {k_n}",
-                "komponen dibutuhkan",
-                accent=(thr == 0.95)
-            ), unsafe_allow_html=True)
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    col_cum, col_scree = st.columns(2)
-    with col_cum:
-        sec("📊", "Cumulative Explained Variance")
-        fig3, ax3 = plt.subplots(figsize=(6,3.8), tight_layout=True)
-        ax3.plot(range(1, len(cumulative)+1), cumulative,
-                 color=ACCENT_LIGHT, linewidth=2.5)
-        ax3.fill_between(range(1, len(cumulative)+1), cumulative,
-                         alpha=0.12, color=ACCENT)
-        for thr, col, lbl in [(0.90,"#f59e0b","90%"),
-                               (0.95,"#a78bfa","95%"),
-                               (0.99,"#22c55e","99%")]:
-            ax3.axhline(thr, color=col, linestyle='--', linewidth=1.3, label=lbl)
-        ax3.set_xlabel("Komponen Utama (k)")
-        ax3.set_ylabel("Cumulative Explained Variance")
-        ax3.set_title("Cumulative Explained Variance", pad=10)
-        ax3.legend(); ax3.set_ylim(0, 1.05)
-        for sp in ['top','right']: ax3.spines[sp].set_visible(False)
-        st.pyplot(fig3, use_container_width=True)
-        plt.close(fig3)
-
-    with col_scree:
-        sec("📉", "Scree Plot")
-        n_sc = min(30, len(eig_all))
-        fig4, ax4 = plt.subplots(figsize=(6,3.8), tight_layout=True)
-        ax4.plot(range(1, n_sc+1), eig_all[:n_sc],
-                 marker='o', color=ACCENT_LIGHT, linewidth=2.2,
-                 markerfacecolor=ACCENT, markersize=5.5)
-        ax4.fill_between(range(1, n_sc+1), eig_all[:n_sc],
-                         alpha=0.1, color=ACCENT)
-        ax4.set_xlabel("Komponen (k)")
-        ax4.set_ylabel("Eigenvalue")
-        ax4.set_title(f"Scree Plot — {n_sc} Eigenvalue Terbesar", pad=10)
-        for sp in ['top','right']: ax4.spines[sp].set_visible(False)
-        st.pyplot(fig4, use_container_width=True)
-        plt.close(fig4)
+def image_bytes_to_gray(image_bytes: bytes) -> np.ndarray:
+    image = Image.open(io.BytesIO(image_bytes))
+    return to_grayscale_numpy(image)
 
 
-# ──────────────────────────────────────────────
-# KOMPRESI (CACHED)
-# ──────────────────────────────────────────────
+def encode_png(image_uint8: np.ndarray) -> bytes:
+    buffer = io.BytesIO()
+    Image.fromarray(image_uint8, mode="L").save(buffer, format="PNG", optimize=True)
+    return buffer.getvalue()
+
+
+def bytes_to_kb(data: bytes) -> float:
+    return len(data) / 1024.0
+
+
+def normalize_uint8(arr: np.ndarray) -> np.ndarray:
+    return np.clip(np.rint(arr), 0, 255).astype(np.uint8)
+
+
+def choose_sample_ks(max_k: int, n_points: int = 24) -> List[int]:
+    if max_k <= 1:
+        return [1]
+    n_points = min(n_points, max_k)
+    ks = np.unique(np.linspace(1, max_k, num=n_points, dtype=int)).tolist()
+    if ks[-1] != max_k:
+        ks.append(max_k)
+    return sorted(set(int(k) for k in ks))
+
+
+def compute_metrics(original_uint8: np.ndarray, reconstructed_uint8: np.ndarray) -> Dict[str, float]:
+    original_f = original_uint8.astype(np.float32)
+    reconstructed_f = reconstructed_uint8.astype(np.float32)
+
+    mse = float(np.mean((original_f - reconstructed_f) ** 2))
+    psnr = float("inf") if mse == 0 else float(10.0 * np.log10((255.0 ** 2) / mse))
+    ssim_val = float(ssim(original_uint8, reconstructed_uint8, data_range=255))
+    return {"mse": mse, "psnr": psnr, "ssim": ssim_val}
+
+
+def compression_ratio(original_size_bytes: int, compressed_size_bytes: int) -> float:
+    if compressed_size_bytes <= 0:
+        return float("inf")
+    return float(original_size_bytes / compressed_size_bytes)
+
+
+def explained_variance_ratio(eigenvalues: np.ndarray) -> np.ndarray:
+    total = float(np.sum(eigenvalues))
+    if total <= 0:
+        return np.zeros_like(eigenvalues, dtype=np.float32)
+    return (eigenvalues / total).astype(np.float32)
+
+
+def select_best_k(curve_df: pd.DataFrame) -> int:
+    if curve_df.empty:
+        return 1
+    psnr = curve_df["psnr"].replace([np.inf, -np.inf], np.nan).fillna(curve_df["psnr"].max())
+    psnr = (psnr - psnr.min()) / (psnr.max() - psnr.min() + 1e-9)
+    ssim_norm = (curve_df["ssim"] - curve_df["ssim"].min()) / (curve_df["ssim"].max() - curve_df["ssim"].min() + 1e-9)
+    size_norm = (curve_df["compressed_kb"].max() - curve_df["compressed_kb"]) / (curve_df["compressed_kb"].max() - curve_df["compressed_kb"].min() + 1e-9)
+    score = 0.45 * ssim_norm + 0.35 * psnr + 0.20 * size_norm
+    return int(curve_df.loc[score.idxmax(), "k"])
+
+
 @st.cache_data(show_spinner=False)
-def jalankan_kompresi(gray_bytes, k_tuple):
-    Xg = np.array(Image.open(io.BytesIO(gray_bytes)).convert("L"), dtype=np.float32)
-    k_s = min(200, Xg.shape[1])
-    _, eig_a = pca_compress(Xg, k_s)
-    ev_r = eig_a / np.sum(eig_a)
-    hasil, metrik = [], []
-    for k in k_tuple:
-        ke = min(k, Xg.shape[1])
-        r, _ = pca_compress(Xg, ke)
-        r8 = r.astype(np.uint8)
-        mse, psnr_v, ssim_v = hitung_metrik(Xg, r)
-        ev_c = float(np.sum(ev_r[:ke])) * 100
-        b = to_bytes(r8, "JPEG")
-        hasil.append(r8)
-        metrik.append({"k":ke,"ev":ev_c,"mse":mse,"psnr":psnr_v,
-                       "ssim":ssim_v,"ukuran_kb":kb(b),"bytes":b})
-    return hasil, metrik, Xg, eig_a
+def compute_pca_decomposition(image_bytes: bytes) -> Dict[str, np.ndarray]:
+    gray = image_bytes_to_gray(image_bytes).astype(np.float32)
 
-with st.spinner("Memproses kompresi untuk semua nilai k…"):
-    hasil_gray, metrik_list, Xg_c, eig_c = jalankan_kompresi(
-        uploaded_file.getvalue(), tuple(k_values)
-    )
+    mean_vector = np.mean(gray, axis=0, dtype=np.float32)
+    centered = gray - mean_vector
 
-# ──────────────────────────────────────────────
-# TAB 3 — KOMPRESI
-# ──────────────────────────────────────────────
-with tab3:
-    st.markdown("<br>", unsafe_allow_html=True)
-    sec("🗜️", "Tabel Evaluasi Kompresi")
+    covariance = np.cov(centered, rowvar=False).astype(np.float32, copy=False)
+    eigenvalues, eigenvectors = np.linalg.eigh(covariance)
+
+    order = np.argsort(eigenvalues)[::-1]
+    eigenvalues = eigenvalues[order].astype(np.float32, copy=False)
+    eigenvectors = eigenvectors[:, order].astype(np.float32, copy=False)
+
+    scores = centered @ eigenvectors
+    ev_ratio = explained_variance_ratio(eigenvalues)
+    cumulative = np.cumsum(ev_ratio).astype(np.float32)
+
+    return {
+        "gray": gray,
+        "mean_vector": mean_vector.astype(np.float32),
+        "centered": centered.astype(np.float32),
+        "eigenvalues": eigenvalues,
+        "eigenvectors": eigenvectors,
+        "scores": scores.astype(np.float32),
+        "explained_variance_ratio": ev_ratio,
+        "cumulative_explained_variance": cumulative,
+    }
+
+
+def reconstruct_from_pca(pca_result: Dict[str, np.ndarray], k: int) -> np.ndarray:
+    eigenvectors = pca_result["eigenvectors"]
+    scores = pca_result["scores"]
+    mean_vector = pca_result["mean_vector"]
+
+    max_components = eigenvectors.shape[1]
+    k = int(np.clip(k, 1, max_components))
+
+    reconstructed = scores[:, :k] @ eigenvectors[:, :k].T + mean_vector
+    return normalize_uint8(reconstructed)
+
+
+@st.cache_data(show_spinner=False)
+def build_curve(image_bytes: bytes, ks: Tuple[int, ...]) -> pd.DataFrame:
+    pca_result = compute_pca_decomposition(image_bytes)
+    original_uint8 = pca_result["gray"].astype(np.uint8)
 
     rows = []
-    for m in metrik_list:
-        ph = ((ukuran_awal_kb - m["ukuran_kb"]) / ukuran_awal_kb) * 100
-        cr = ukuran_awal_kb / m["ukuran_kb"] if m["ukuran_kb"] > 0 else 0
-        rows.append({
-            "k"              : m["k"],
-            "Expl. Var (%)"  : round(m["ev"],2),
-            "MSE"            : round(m["mse"],2),
-            "PSNR (dB)"      : round(m["psnr"],2),
-            "SSIM"           : round(m["ssim"],4),
-            "Ukuran (KB)"    : round(m["ukuran_kb"],2),
-            "Hemat (%)"      : round(ph,1),
-            "CR (×)"         : round(cr,2),
-        })
-    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    for k in ks:
+        reconstructed_uint8 = reconstruct_from_pca(pca_result, k)
+        comp_bytes = encode_png(reconstructed_uint8)
+        metrics = compute_metrics(original_uint8, reconstructed_uint8)
+        explained = float(np.sum(pca_result["explained_variance_ratio"][:k]) * 100.0)
 
-    st.markdown("<br>", unsafe_allow_html=True)
-    sec("🖼️", "Komparasi Visual")
-
-    # Grid 4 per baris
-    chunk = 4
-    groups = [k_values[i:i+chunk] for i in range(0, len(k_values), chunk)]
-    for grp in groups:
-        cols_g = st.columns(len(grp)+1)
-        with cols_g[0]:
-            st.markdown('<div class="img-frame">', unsafe_allow_html=True)
-            st.image(Xg_c.astype(np.uint8), use_container_width=True, clamp=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="img-label">Original</div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="img-meta">{ukuran_awal_kb:.1f} KB</div>', unsafe_allow_html=True)
-        for j, kv in enumerate(grp):
-            idx = k_values.index(kv)
-            m   = metrik_list[idx]
-            with cols_g[j+1]:
-                st.markdown('<div class="img-frame">', unsafe_allow_html=True)
-                st.image(hasil_gray[idx], use_container_width=True)
-                st.markdown('</div>', unsafe_allow_html=True)
-                ph2 = ((ukuran_awal_kb - m["ukuran_kb"]) / ukuran_awal_kb) * 100
-                st.markdown(f'<div class="img-label">k = {kv}</div>', unsafe_allow_html=True)
-                st.markdown(
-                    f'<div class="img-meta">'
-                    f'PSNR {m["psnr"]:.1f} dB &nbsp;·&nbsp; SSIM {m["ssim"]:.3f}<br>'
-                    f'{m["ukuran_kb"]:.1f} KB &nbsp;·&nbsp; -{ph2:.0f}%'
-                    f'</div>', unsafe_allow_html=True)
-
-    st.markdown("<br>", unsafe_allow_html=True)
-    sec("📈", "Grafik Metrik")
-
-    ks      = [m["k"]    for m in metrik_list]
-    mses    = [m["mse"]  for m in metrik_list]
-    psnrs   = [m["psnr"] for m in metrik_list]
-    ssims   = [m["ssim"] for m in metrik_list]
-    ukurans = [m["ukuran_kb"] for m in metrik_list]
-
-    fig5, ax5 = plt.subplots(2,2, figsize=(13,8), tight_layout=True)
-
-    def _plot(ax, y, color, title, ylabel, refs=None):
-        ax.plot(ks, y, marker='o', color=color, linewidth=2.2,
-                markerfacecolor=BG_BASE, markeredgecolor=color, markersize=6)
-        ax.fill_between(ks, y, alpha=0.08, color=color)
-        if refs:
-            for val, lbl, c in refs:
-                ax.axhline(val, color=c, linestyle='--', linewidth=1.2, label=lbl, alpha=0.8)
-            ax.legend()
-        ax.set_title(title, pad=10)
-        ax.set_xlabel("k (komponen utama)")
-        ax.set_ylabel(ylabel)
-        for sp in ['top','right']: ax.spines[sp].set_visible(False)
-
-    _plot(ax5[0,0], mses,    "#ef4444", "MSE vs k",             "MSE")
-    _plot(ax5[0,1], psnrs,   ACCENT_LIGHT, "PSNR vs k",         "PSNR (dB)",
-          [(30,"30 dB — Baik","#f59e0b"),(40,"40 dB — Sangat Baik","#22c55e")])
-    _plot(ax5[1,0], ssims,   "#22c55e", "SSIM vs k",            "SSIM",
-          [(0.90,"SSIM = 0.90","#f59e0b")])
-    ax5[1,0].set_ylim(0, 1.05)
-    _plot(ax5[1,1], ukurans, "#f59e0b", "Ukuran File vs k",     "Ukuran (KB)")
-    ax5[1,1].axhline(ukuran_awal_kb, color=TEXT_MUTED, linestyle='--',
-                     linewidth=1.2, label=f"Asli = {ukuran_awal_kb:.1f} KB", alpha=0.6)
-    ax5[1,1].legend()
-
-    st.pyplot(fig5, use_container_width=True)
-    plt.close(fig5)
-
-
-# ──────────────────────────────────────────────
-# TAB 4 — EDA PASCA KOMPRESI
-# ──────────────────────────────────────────────
-with tab4:
-    st.markdown("<br>", unsafe_allow_html=True)
-    sec("🔍", "EDA Setelah Kompresi — Detail per k")
-
-    n_eda = min(k_eda_count, len(k_values))
-    step  = max(1, len(k_values) // n_eda)
-    idx_eda = list(dict.fromkeys(
-        [0] + list(range(0, len(k_values), step)) + [len(k_values)-1]
-    ))[:n_eda]
-
-    for idx in idx_eda:
-        m   = metrik_list[idx]
-        k_c = m["k"]
-        img = hasil_gray[idx]
-        ph  = ((ukuran_awal_kb - m["ukuran_kb"]) / ukuran_awal_kb) * 100
-
-        st.markdown(
-            f'<div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:1rem">'
-            f'<span style="font-size:1rem;font-weight:700;color:{TEXT_PRIMARY}">k = {k_c}</span>'
-            f'&nbsp;{quality_badge(m["psnr"])}'
-            f'&nbsp;<span style="font-size:0.72rem;color:{TEXT_MUTED}">·&nbsp; -{ph:.0f}% ukuran</span>'
-            f'</div>',
-            unsafe_allow_html=True
+        rows.append(
+            {
+                "k": int(k),
+                "explained_variance": explained,
+                "mse": metrics["mse"],
+                "psnr": metrics["psnr"],
+                "ssim": metrics["ssim"],
+                "compressed_kb": bytes_to_kb(comp_bytes),
+                "compressed_bytes": len(comp_bytes),
+            }
         )
 
-        c1,c2,c3,c4 = st.columns(4)
-        with c1: st.markdown(card("MSE",  f'{m["mse"]:.1f}',  "error per piksel²"), unsafe_allow_html=True)
-        with c2: st.markdown(card("PSNR", f'{m["psnr"]:.2f}', "dB — kualitas", accent=True), unsafe_allow_html=True)
-        with c3: st.markdown(card("SSIM", f'{m["ssim"]:.4f}', "structural similarity", accent=True), unsafe_allow_html=True)
-        with c4: st.markdown(card("Hemat", f'{ph:.1f}%',      f'{m["ukuran_kb"]:.1f} KB hasil'), unsafe_allow_html=True)
-
-        st.markdown("<br>", unsafe_allow_html=True)
-
-        fig6, axes6 = plt.subplots(1,4, figsize=(18,4.2), tight_layout=True)
-
-        axes6[0].imshow(Xg_c.astype(np.uint8), cmap='gray')
-        axes6[0].set_title("Original", pad=8); axes6[0].axis('off')
-
-        axes6[1].imshow(img, cmap='gray')
-        axes6[1].set_title(f"Rekonstruksi k={k_c}", pad=8); axes6[1].axis('off')
-
-        err = np.abs(Xg_c - img.astype(np.float32))
-        im6 = axes6[2].imshow(err, cmap='plasma')
-        axes6[2].set_title(f"Error Map · MSE={m['mse']:.2f}", pad=8); axes6[2].axis('off')
-        cbar = fig6.colorbar(im6, ax=axes6[2], fraction=0.046, pad=0.04)
-        cbar.ax.tick_params(colors=PLOT_TEXT, labelsize=7)
-
-        axes6[3].hist(Xg_c.flatten(), bins=64, alpha=0.65, color=ACCENT_LIGHT, label='Asli')
-        axes6[3].hist(img.flatten().astype(float), bins=64, alpha=0.65, color="#f59e0b", label=f'k={k_c}')
-        axes6[3].set_xlabel("Intensitas"); axes6[3].set_ylabel("Frekuensi")
-        axes6[3].set_title("Histogram Perbandingan", pad=8)
-        axes6[3].legend()
-        for sp in ['top','right']: axes6[3].spines[sp].set_visible(False)
-
-        st.pyplot(fig6, use_container_width=True)
-        plt.close(fig6)
-        st.markdown(f'<hr style="border-color:{BORDER};margin:1.5rem 0">', unsafe_allow_html=True)
+    return pd.DataFrame(rows)
 
 
-# ──────────────────────────────────────────────
-# TAB 5 — EXPORT
-# ──────────────────────────────────────────────
-with tab5:
-    st.markdown("<br>", unsafe_allow_html=True)
+def plot_scree_plot(eigenvalues: np.ndarray, max_points: int = 40) -> go.Figure:
+    n = min(max_points, len(eigenvalues))
+    x = np.arange(1, n + 1)
+    y = eigenvalues[:n]
 
-    # Optimal Card
-    best_i = max(range(len(metrik_list)),
-                 key=lambda i: (metrik_list[i]["ssim"]*0.5
-                                + (metrik_list[i]["psnr"]/50)*0.3
-                                - (metrik_list[i]["ukuran_kb"]/ukuran_awal_kb)*0.2))
-    bm  = metrik_list[best_i]
-    bph = ((ukuran_awal_kb - bm["ukuran_kb"]) / ukuran_awal_kb) * 100
-    bcr = ukuran_awal_kb / bm["ukuran_kb"]
+    fig = go.Figure()
+    fig.add_trace(
+        go.Bar(
+            x=x,
+            y=y,
+            marker=dict(color="rgba(34, 211, 238, 0.75)"),
+            hovertemplate="PC %{x}<br>Eigenvalue=%{y:.4f}<extra></extra>",
+            name="Eigenvalue",
+        )
+    )
+    fig.update_layout(
+        template="plotly_dark",
+        height=420,
+        margin=dict(l=20, r=20, t=40, b=20),
+        title=dict(text="Scree Plot", x=0.02),
+        xaxis_title="Principal Component",
+        yaxis_title="Eigenvalue",
+        paper_bgcolor=BG_BASE,
+        plot_bgcolor=BG_BASE,
+    )
+    return fig
 
-    st.markdown(f"""
-    <div class="optimal-card" style="margin-bottom:2rem">
-        <div style="font-size:0.65rem;font-weight:700;text-transform:uppercase;
-                    letter-spacing:0.12em;color:{ACCENT_LIGHT};margin-bottom:0.8rem">
-            ✦ Titik Optimal Direkomendasikan
-        </div>
-        <div style="font-size:2.4rem;font-weight:800;letter-spacing:-0.04em;
-                    color:{TEXT_PRIMARY};margin-bottom:0.6rem">k = {bm["k"]}</div>
-        <div style="display:flex;gap:2.5rem;flex-wrap:wrap">
-            <div>
-                <div style="font-size:0.65rem;color:{TEXT_MUTED};text-transform:uppercase;
-                            letter-spacing:0.08em">Explained Var</div>
-                <div style="font-size:1.1rem;font-weight:700;color:{ACCENT_LIGHT}">{bm["ev"]:.1f}%</div>
-            </div>
-            <div>
-                <div style="font-size:0.65rem;color:{TEXT_MUTED};text-transform:uppercase;
-                            letter-spacing:0.08em">PSNR</div>
-                <div style="font-size:1.1rem;font-weight:700;color:{TEXT_PRIMARY}">{bm["psnr"]:.2f} dB</div>
-            </div>
-            <div>
-                <div style="font-size:0.65rem;color:{TEXT_MUTED};text-transform:uppercase;
-                            letter-spacing:0.08em">SSIM</div>
-                <div style="font-size:1.1rem;font-weight:700;color:{TEXT_PRIMARY}">{bm["ssim"]:.4f}</div>
-            </div>
-            <div>
-                <div style="font-size:0.65rem;color:{TEXT_MUTED};text-transform:uppercase;
-                            letter-spacing:0.08em">Ukuran</div>
-                <div style="font-size:1.1rem;font-weight:700;color:{SUCCESS}">{bm["ukuran_kb"]:.1f} KB</div>
-            </div>
-            <div>
-                <div style="font-size:0.65rem;color:{TEXT_MUTED};text-transform:uppercase;
-                            letter-spacing:0.08em">Hemat</div>
-                <div style="font-size:1.1rem;font-weight:700;color:{SUCCESS}">-{bph:.1f}%</div>
-            </div>
-            <div>
-                <div style="font-size:0.65rem;color:{TEXT_MUTED};text-transform:uppercase;
-                            letter-spacing:0.08em">Rasio Kompresi</div>
-                <div style="font-size:1.1rem;font-weight:700;color:{TEXT_PRIMARY}">{bcr:.2f}×</div>
-            </div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
 
-    sec("⬇️", "Download Per Nilai k")
-
-    dl_cols = st.columns(min(len(k_values), 4))
-    for i, (kv, m) in enumerate(zip(k_values, metrik_list)):
-        ph2 = ((ukuran_awal_kb - m["ukuran_kb"]) / ukuran_awal_kb) * 100
-        with dl_cols[i % 4]:
-            st.download_button(
-                label     = f"k={kv} · {m['ukuran_kb']:.0f}KB · -{ph2:.0f}%",
-                data      = m["bytes"],
-                file_name = f"PCA_k{kv}.jpg",
-                mime      = "image/jpeg",
-                key       = f"dl_{kv}",
-            )
-
-    st.markdown("<br>", unsafe_allow_html=True)
-    sec("📦", "Download Semua Sekaligus")
-
-    # Build ZIP + laporan
-    zip_buf = io.BytesIO()
-    with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        for kv, m in zip(k_values, metrik_list):
-            zf.writestr(f"PCA_k{kv}.jpg", m["bytes"])
-        lines = [
-            "╔══════════════════════════════════════════════════╗",
-            "║          LAPORAN KOMPRESI PCA                    ║",
-            "╚══════════════════════════════════════════════════╝",
-            f"File        : {uploaded_file.name}",
-            f"Ukuran Asli : {ukuran_awal_kb:.2f} KB",
-            f"Dimensi     : {gambar.size[0]} × {gambar.size[1]} px",
-            "",
-            f"{'k':>5} | {'Expl.Var':>9} | {'MSE':>8} | {'PSNR':>9} | {'SSIM':>7} | {'KB':>7} | {'Hemat':>6}",
-            "─" * 67,
-        ]
-        for m in metrik_list:
-            ph3 = ((ukuran_awal_kb - m["ukuran_kb"]) / ukuran_awal_kb) * 100
-            lines.append(
-                f"{m['k']:>5} | {m['ev']:>8.2f}% | {m['mse']:>8.2f} | "
-                f"{m['psnr']:>8.2f} | {m['ssim']:>7.4f} | {m['ukuran_kb']:>6.1f} | {ph3:>5.1f}%"
-            )
-        lines += ["", f"★ Optimal: k={bm['k']} (PSNR={bm['psnr']:.2f} dB · SSIM={bm['ssim']:.4f})"]
-        zf.writestr("laporan_kompresi.txt", "\n".join(lines))
-    zip_buf.seek(0)
-
-    st.download_button(
-        label     = "📦 Download semua hasil (.zip) + laporan",
-        data      = zip_buf.getvalue(),
-        file_name = "PCA_compressed_all.zip",
-        mime      = "application/zip",
-        key       = "dl_zip",
+def plot_cumulative_variance(cumulative: np.ndarray) -> go.Figure:
+    x = np.arange(1, len(cumulative) + 1)
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=x,
+            y=cumulative,
+            mode="lines",
+            line=dict(color=CYAN, width=3),
+            name="Cumulative Explained Variance",
+            hovertemplate="PC %{x}<br>Cumulative=%{y:.4f}<extra></extra>",
+        )
     )
 
-# ── Footer ──────────────────────────────────────
-st.markdown(f"""
-<div style="text-align:center; padding:3rem 0 1rem; color:{TEXT_MUTED};
-            font-size:0.7rem; letter-spacing:0.06em; text-transform:uppercase">
-    ✦ PCA Image Compressor &nbsp;·&nbsp; Eigenvalue &amp; Eigenvector &nbsp;·&nbsp;
-    Built with Streamlit
-</div>
-""", unsafe_allow_html=True)
+    for level, color in [(0.80, AMBER), (0.90, PURPLE), (0.95, GREEN)]:
+        fig.add_hline(y=level, line_dash="dash", line_color=color, opacity=0.75)
+
+    fig.update_layout(
+        template="plotly_dark",
+        height=420,
+        margin=dict(l=20, r=20, t=40, b=20),
+        title=dict(text="Cumulative Explained Variance", x=0.02),
+        xaxis_title="Principal Component",
+        yaxis_title="Explained Variance",
+        paper_bgcolor=BG_BASE,
+        plot_bgcolor=BG_BASE,
+        yaxis=dict(range=[0, 1.05]),
+    )
+    return fig
+
+
+def plot_histogram_overlay(original_uint8: np.ndarray, reconstructed_uint8: np.ndarray, title: str) -> go.Figure:
+    fig = go.Figure()
+    fig.add_trace(
+        go.Histogram(
+            x=original_uint8.flatten(),
+            nbinsx=64,
+            opacity=0.62,
+            name="Original",
+            marker_color=CYAN,
+        )
+    )
+    fig.add_trace(
+        go.Histogram(
+            x=reconstructed_uint8.flatten(),
+            nbinsx=64,
+            opacity=0.62,
+            name="Reconstructed",
+            marker_color=PURPLE,
+        )
+    )
+    fig.update_layout(
+        template="plotly_dark",
+        barmode="overlay",
+        height=420,
+        margin=dict(l=20, r=20, t=40, b=20),
+        title=dict(text=title, x=0.02),
+        xaxis_title="Pixel Intensity",
+        yaxis_title="Count",
+        paper_bgcolor=BG_BASE,
+        plot_bgcolor=BG_BASE,
+    )
+    return fig
+
+
+def plot_metric_curves(curve_df: pd.DataFrame) -> go.Figure:
+    fig = go.Figure()
+
+    fig.add_trace(
+        go.Scatter(
+            x=curve_df["k"],
+            y=curve_df["psnr"],
+            mode="lines+markers",
+            line=dict(color=CYAN, width=3),
+            marker=dict(size=8),
+            name="PSNR",
+            hovertemplate="k=%{x}<br>PSNR=%{y:.2f} dB<extra></extra>",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=curve_df["k"],
+            y=curve_df["ssim"],
+            mode="lines+markers",
+            line=dict(color=PURPLE, width=3),
+            marker=dict(size=8),
+            name="SSIM",
+            yaxis="y2",
+            hovertemplate="k=%{x}<br>SSIM=%{y:.4f}<extra></extra>",
+        )
+    )
+
+    fig.update_layout(
+        template="plotly_dark",
+        height=460,
+        margin=dict(l=20, r=20, t=40, b=20),
+        title=dict(text="PSNR and SSIM versus k", x=0.02),
+        xaxis_title="k",
+        yaxis=dict(title="PSNR (dB)", side="left"),
+        yaxis2=dict(
+            title="SSIM",
+            overlaying="y",
+            side="right",
+            range=[0, 1.05],
+            showgrid=False,
+        ),
+        paper_bgcolor=BG_BASE,
+        plot_bgcolor=BG_BASE,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+    )
+    return fig
+
+
+inject_css()
+
+with st.sidebar:
+    st.markdown('<div class="section-label">PCA Image Compression Lab</div>', unsafe_allow_html=True)
+    st.markdown("Upload gambar JPG atau PNG, lalu atur nilai k untuk melihat trade-off kualitas dan ukuran.")
+    uploaded_file = st.file_uploader("Upload image", type=["jpg", "jpeg", "png"], accept_multiple_files=False)
+    st.markdown("---")
+    st.markdown(
+        """
+        <div class="small-note">
+        PCA dihitung pada citra grayscale. Eigenvalue dan eigenvector dicache agar perubahan slider k tetap ringan.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+if uploaded_file is None:
+    st.markdown(
+        """
+        <div style="min-height:72vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;">
+            <div class="hero-title">PCA Image Compression Lab</div>
+            <div class="hero-subtitle" style="max-width:720px;">
+                Kompresi citra grayscale berbasis Principal Component Analysis dengan evaluasi MSE, PSNR, SSIM, compression ratio, dan visualisasi interaktif berbasis Plotly.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.stop()
+
+image_bytes = uploaded_file.getvalue()
+pca_result = compute_pca_decomposition(image_bytes)
+gray_uint8 = pca_result["gray"].astype(np.uint8)
+
+original_size_bytes = len(image_bytes)
+original_size_kb = bytes_to_kb(image_bytes)
+max_k = min(pca_result["eigenvectors"].shape[1], pca_result["gray"].shape[1])
+
+if "k_value" not in st.session_state:
+    st.session_state["k_value"] = 1
+st.session_state["k_value"] = int(np.clip(st.session_state["k_value"], 1, max_k))
+
+with st.sidebar:
+    k_value = st.slider(
+        "Principal component k",
+        min_value=1,
+        max_value=max_k,
+        value=min(st.session_state["k_value"], max_k),
+        step=1,
+    )
+    st.session_state["k_value"] = k_value
+
+reconstructed_uint8 = reconstruct_from_pca(pca_result, k_value)
+compressed_bytes = encode_png(reconstructed_uint8)
+compressed_size_bytes = len(compressed_bytes)
+compressed_size_kb = bytes_to_kb(compressed_bytes)
+
+selected_metrics = compute_metrics(gray_uint8, reconstructed_uint8)
+cr = compression_ratio(original_size_bytes, compressed_size_bytes)
+reduction_pct = 100.0 * (1.0 - compressed_size_bytes / original_size_bytes) if original_size_bytes > 0 else 0.0
+
+curve_ks = tuple(choose_sample_ks(max_k=max_k, n_points=24))
+curve_df = build_curve(image_bytes, curve_ks)
+best_k = select_best_k(curve_df)
+
+st.markdown(
+    f"""
+    <div class="panel" style="margin-bottom:1rem;">
+        <div class="hero-title">PCA Image Compression Lab</div>
+        <div class="hero-subtitle">
+            {uploaded_file.name} · {gray_uint8.shape[1]} × {gray_uint8.shape[0]} px · Original size {original_size_kb:.2f} KB
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+m1, m2, m3, m4 = st.columns(4)
+m1.metric("Original size", f"{original_size_kb:.2f} KB")
+m2.metric("Compressed size", f"{compressed_size_kb:.2f} KB", delta=f"{reduction_pct:.1f}%")
+m3.metric("Compression ratio", f"{cr:.2f}x")
+m4.metric("Selected k", f"{k_value}", delta=f"Best k: {best_k}")
+
+tab_overview, tab_eigen, tab_compress, tab_export = st.tabs(
+    ["Overview", "Eigen Analysis", "Compression Dashboard", "Export"]
+)
+
+with tab_overview:
+    left, right = st.columns([1.1, 1.0])
+
+    with left:
+        st.markdown('<div class="section-label">Image Preview</div>', unsafe_allow_html=True)
+        c1, c2 = st.columns(2)
+        with c1:
+            st.image(Image.open(io.BytesIO(image_bytes)), caption="Original image", use_container_width=True)
+        with c2:
+            st.image(reconstructed_uint8, caption=f"Reconstructed grayscale, k={k_value}", use_container_width=True)
+
+    with right:
+        st.markdown('<div class="section-label">Live Metrics</div>', unsafe_allow_html=True)
+        st.metric("MSE", f"{selected_metrics['mse']:.4f}")
+        st.metric("PSNR", f"{selected_metrics['psnr']:.2f} dB")
+        st.metric("SSIM", f"{selected_metrics['ssim']:.4f}")
+        st.metric("Compression ratio", f"{cr:.2f}x", delta=f"{reduction_pct:.1f}% smaller")
+
+        st.markdown('<div class="section-label" style="margin-top:1rem;">Quick summary</div>', unsafe_allow_html=True)
+        summary_col1, summary_col2 = st.columns(2)
+        with summary_col1:
+            st.metric("Mean intensity", f"{gray_uint8.mean():.2f}")
+            st.metric("Std intensity", f"{gray_uint8.std():.2f}")
+        with summary_col2:
+            st.metric("Selected file size", f"{compressed_size_kb:.2f} KB")
+            st.metric("Explained variance", f"{curve_df.loc[curve_df['k'] == k_value, 'explained_variance'].iloc[0]:.2f}%")
+
+        st.markdown(
+            """
+            <div class="tech-box">
+                <div class="small-note">
+                The compressed output is saved as PNG bytes for size evaluation and download. PCA decomposition is cached on the uploaded image bytes, so moving the k slider does not recompute eigenvalue decomposition.
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+with tab_eigen:
+    st.markdown('<div class="section-label">PCA Decomposition</div>', unsafe_allow_html=True)
+    c1, c2, c3, c4 = st.columns(4)
+
+    evr = pca_result["explained_variance_ratio"]
+    cumulative = pca_result["cumulative_explained_variance"]
+    eigenvalues = pca_result["eigenvalues"]
+
+    c1.metric("Top eigenvalue", f"{eigenvalues[0]:.4f}")
+    c2.metric("Variance PC1", f"{evr[0] * 100:.2f}%")
+    c3.metric("Variance at selected k", f"{cumulative[min(k_value, len(cumulative)) - 1] * 100:.2f}%")
+    c4.metric("Components for 95%", f"{int(np.argmax(cumulative >= 0.95) + 1)}")
+
+    left, right = st.columns(2)
+    with left:
+        st.plotly_chart(plot_scree_plot(eigenvalues), use_container_width=True, config={"displayModeBar": True})
+    with right:
+        st.plotly_chart(plot_cumulative_variance(cumulative), use_container_width=True, config={"displayModeBar": True})
+
+    with st.expander("Technical details", expanded=False):
+        st.markdown(
+            f"""
+            <div class="tech-box">
+                <div class="small-note">
+                PCA is computed on the grayscale matrix after mean centering by column. The covariance matrix is decomposed with eigh, then eigenvalues are sorted in descending order. Reconstruction uses the first k principal components.
+                </div>
+                <div class="small-note" style="margin-top:0.6rem;">
+                X̂ = (X - μ)W<sub>k</sub>W<sub>k</sub><sup>T</sup> + μ
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+with tab_compress:
+    st.markdown('<div class="section-label">Selected Reconstruction</div>', unsafe_allow_html=True)
+
+    top_left, top_right = st.columns([1.05, 0.95])
+
+    with top_left:
+        st.image(reconstructed_uint8, caption=f"Reconstructed grayscale image for k={k_value}", use_container_width=True)
+
+    with top_right:
+        st.markdown('<div class="section-label">Selected k metrics</div>', unsafe_allow_html=True)
+        st.metric("MSE", f"{selected_metrics['mse']:.4f}")
+        st.metric("PSNR", f"{selected_metrics['psnr']:.2f} dB")
+        st.metric("SSIM", f"{selected_metrics['ssim']:.4f}")
+        st.metric("Compression ratio", f"{cr:.2f}x", delta=f"{reduction_pct:.1f}% smaller")
+
+        st.markdown('<div class="section-label" style="margin-top:1rem;">Pixel intensity distribution</div>', unsafe_allow_html=True)
+        st.plotly_chart(
+            plot_histogram_overlay(gray_uint8, reconstructed_uint8, "Original versus reconstructed histogram"),
+            use_container_width=True,
+            config={"displayModeBar": True},
+        )
+
+    st.markdown('<div class="section-label">Metrics versus k</div>', unsafe_allow_html=True)
+    st.plotly_chart(
+        plot_metric_curves(curve_df),
+        use_container_width=True,
+        config={"displayModeBar": True},
+    )
+
+    st.markdown('<div class="section-label">Comparison table</div>', unsafe_allow_html=True)
+    display_df = curve_df.copy()
+    display_df["explained_variance"] = display_df["explained_variance"].round(2)
+    display_df["mse"] = display_df["mse"].round(4)
+    display_df["psnr"] = display_df["psnr"].round(2)
+    display_df["ssim"] = display_df["ssim"].round(4)
+    display_df["compressed_kb"] = display_df["compressed_kb"].round(2)
+
+    st.dataframe(
+        display_df.rename(
+            columns={
+                "k": "k",
+                "explained_variance": "Explained Variance (%)",
+                "mse": "MSE",
+                "psnr": "PSNR (dB)",
+                "ssim": "SSIM",
+                "compressed_kb": "Compressed Size (KB)",
+                "compressed_bytes": "Compressed Bytes",
+            }
+        ),
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    with st.expander("Technical details", expanded=False):
+        st.markdown(
+            """
+            <div class="tech-box">
+                <div class="small-note">
+                The PCA decomposition is cached once per uploaded image. Changing k only triggers reconstruction from the cached eigenvectors and scores, which is the fast path.
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+with tab_export:
+    best_idx = curve_df["ssim"].idxmax()
+    best_row = curve_df.loc[best_idx]
+    recommended_k = int(best_row["k"])
+
+    left, right = st.columns([0.95, 1.05])
+
+    with left:
+        st.markdown('<div class="section-label">Recommended setting</div>', unsafe_allow_html=True)
+        st.metric("Recommended k", f"{recommended_k}")
+        st.metric("Recommended SSIM", f"{float(best_row['ssim']):.4f}")
+        st.metric("Recommended PSNR", f"{float(best_row['psnr']):.2f} dB")
+        st.metric("Recommended size", f"{float(best_row['compressed_kb']):.2f} KB")
+
+    with right:
+        st.markdown('<div class="section-label">Download compressed image</div>', unsafe_allow_html=True)
+        st.download_button(
+            label=f"Download PNG for k={k_value}",
+            data=compressed_bytes,
+            file_name=f"pca_compressed_k_{k_value}.png",
+            mime="image/png",
+        )
+
+        zip_buffer = io.BytesIO()
+        with st.spinner("Preparing archive..."):
+            import zipfile
+
+            with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+                for _, row in curve_df.iterrows():
+                    k_i = int(row["k"])
+                    recon_i = reconstruct_from_pca(pca_result, k_i)
+                    zf.writestr(f"pca_k_{k_i}.png", encode_png(recon_i))
+
+                report_lines = [
+                    "PCA Image Compression Report",
+                    f"File: {uploaded_file.name}",
+                    f"Original size: {original_size_kb:.2f} KB",
+                    f"Image size: {gray_uint8.shape[1]} x {gray_uint8.shape[0]} px",
+                    "",
+                    "k | Explained Var (%) | MSE | PSNR (dB) | SSIM | Compressed KB | Compression Ratio",
+                    "-" * 86,
+                ]
+                for _, row in curve_df.iterrows():
+                    comp_kb = float(row["compressed_kb"])
+                    ratio_i = compression_ratio(original_size_bytes, int(row["compressed_bytes"]))
+                    report_lines.append(
+                        f"{int(row['k'])} | {float(row['explained_variance']):.2f} | {float(row['mse']):.4f} | "
+                        f"{float(row['psnr']):.2f} | {float(row['ssim']):.4f} | {comp_kb:.2f} | {ratio_i:.2f}x"
+                    )
+                report_lines.append("")
+                report_lines.append(f"Recommended k: {recommended_k}")
+                zf.writestr("report.txt", "\n".join(report_lines))
+
+        zip_buffer.seek(0)
+
+        st.download_button(
+            label="Download all reconstructions as ZIP",
+            data=zip_buffer.getvalue(),
+            file_name="pca_compression_results.zip",
+            mime="application/zip",
+        )
+
+    with st.expander("Technical details", expanded=False):
+        st.markdown(
+            """
+            <div class="tech-box">
+                <div class="small-note">
+                Compression ratio is computed from the original file bytes divided by the PNG-encoded reconstructed image bytes. This keeps the metric grounded in actual file size, not only array size.
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
