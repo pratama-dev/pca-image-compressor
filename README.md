@@ -23,7 +23,7 @@ Proyek ini dibuat sebagai implementasi praktis dari materi **Kompresi Citra deng
 
 | Fitur | Deskripsi |
 |-------|-----------|
-| ✏️ **Input K Bebas** | Ketik nilai k sendiri dipisah koma — bebas tentukan berapa saja yang ingin diuji |
+| ✏️ **Input K Bebas** | Ketik nilai k sendiri dipisah koma dan bebas tentukan berapa saja yang ingin diuji |
 | 📊 **EDA Awal** | Statistik piksel, histogram intensitas, deteksi kecerahan & kontras otomatis |
 | 📈 **Analisis Eigenvalue** | Scree Plot, Cumulative Explained Variance, threshold otomatis (80/90/95/99%) |
 | 🗜️ **Kompresi Multi-k** | Uji semua nilai k yang diinput sekaligus dalam satu proses |
@@ -35,7 +35,7 @@ Proyek ini dibuat sebagai implementasi praktis dari materi **Kompresi Citra deng
 
 ## ✏️ Cara Input Nilai K
 
-Di sidebar kiri, terdapat kolom teks **"Nilai K — Input Manual"**. Cukup ketik angka-angka yang diinginkan dipisah dengan koma:
+Di sidebar kiri, terdapat kolom teks **"Nilai K sebagai Input Manual"**. Cukup ketik angka-angka yang diinginkan dipisah dengan koma:
 
 ```
 5, 10, 20, 50, 100
