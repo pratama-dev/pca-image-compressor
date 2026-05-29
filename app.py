@@ -35,46 +35,231 @@ AMBER = "#f59e0b"
 RED = "#ef4444"
 
 
-section[data-testid="stSidebar"],
-[data-testid="stSidebar"] {
-    display: block !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    width: 320px !important;
-    min-width: 320px !important;
-    max-width: 320px !important;
-    z-index: 9999 !important;
-    overflow: visible !important;
-    background: #111823 !important;
-    border-right: 1px solid rgba(255, 255, 255, 0.10) !important;
-}
+def inject_css() -> None:
+    st.markdown(
+        f"""
+        <style>
+        html, body, [class*="css"] {{
+            background: {BG_BASE} !important;
+            color: {TEXT_PRIMARY} !important;
+        }}
 
-section[data-testid="stSidebar"] .block-container,
-[data-testid="stSidebar"] .block-container {
-    padding-top: 1.2rem !important;
-    padding-left: 1.1rem !important;
-    padding-right: 1.1rem !important;
-}
+        #MainMenu, footer, header {{
+            visibility: hidden;
+        }}
 
-section[data-testid="stSidebar"] *,
-[data-testid="stSidebar"] * {
-    color: #e7eef9 !important;
-    opacity: 1 !important;
-}
+        .block-container {{
+            padding-top: 1.6rem;
+            padding-bottom: 2rem;
+            max-width: 1400px;
+        }}
 
-section[data-testid="stSidebar"] [data-testid="stFileUploader"] section,
-[data-testid="stSidebar"] [data-testid="stFileUploader"] section {
-    background: rgba(15, 23, 42, 0.88) !important;
-    border: 1.4px dashed rgba(34, 211, 238, 0.28) !important;
-    border-radius: 1rem !important;
-    transition: all 0.25s ease;
-}
+        [data-testid="stSidebar"] {{
+            display: block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            width: 320px !important;
+            min-width: 320px !important;
+            max-width: 320px !important;
+            z-index: 9999 !important;
+            overflow: visible !important;
+            background: {BG_SURFACE} !important;
+            border-right: 1px solid {BORDER} !important;
+        }}
 
-section[data-testid="stSidebar"] [data-testid="stFileUploader"] section:hover,
-[data-testid="stSidebar"] [data-testid="stFileUploader"] section:hover {
-    border-color: rgba(168, 85, 247, 0.55) !important;
-    background: rgba(17, 24, 39, 0.96) !important;
-}
+        [data-testid="stSidebar"] .block-container {{
+            padding-top: 1.2rem;
+            padding-left: 1.1rem;
+            padding-right: 1.1rem;
+        }}
+
+        [data-testid="stSidebar"] *,
+        [data-testid="stSidebar"] p,
+        [data-testid="stSidebar"] span,
+        [data-testid="stSidebar"] label,
+        [data-testid="stSidebar"] .stMarkdown,
+        [data-testid="stSidebar"] .stMarkdown p {{
+            color: #e7eef9 !important;
+            opacity: 1 !important;
+        }}
+
+        [data-testid="stSidebar"] h1,
+        [data-testid="stSidebar"] h2,
+        [data-testid="stSidebar"] h3,
+        [data-testid="stSidebar"] h4,
+        [data-testid="stSidebar"] h5,
+        [data-testid="stSidebar"] h6 {{
+            color: {TEXT_PRIMARY} !important;
+            font-weight: 800 !important;
+        }}
+
+        [data-testid="stSidebar"] input::placeholder {{
+            color: #9eb0c4 !important;
+            opacity: 1 !important;
+        }}
+
+        [data-testid="stSidebar"] [data-testid="stFileUploader"] section {{
+            background: rgba(15, 23, 42, 0.88) !important;
+            border: 1.4px dashed rgba(34, 211, 238, 0.28) !important;
+            border-radius: 1rem !important;
+            transition: all 0.25s ease;
+        }}
+
+        [data-testid="stSidebar"] [data-testid="stFileUploader"] section:hover {{
+            border-color: rgba(168, 85, 247, 0.55) !important;
+            background: rgba(17, 24, 39, 0.96) !important;
+        }}
+
+        [data-testid="stSidebar"] [data-testid="stFileUploader"] p,
+        [data-testid="stSidebar"] [data-testid="stFileUploader"] span,
+        [data-testid="stSidebar"] [data-testid="stFileUploader"] small {{
+            color: #dbe7f5 !important;
+        }}
+
+        [data-testid="stSidebar"] [data-testid="baseButton-secondary"] {{
+            background: linear-gradient(
+                90deg,
+                rgba(34, 211, 238, 0.14),
+                rgba(168, 85, 247, 0.14)
+            ) !important;
+            border: 1px solid rgba(34, 211, 238, 0.22) !important;
+            color: #f4f7fb !important;
+            border-radius: 0.8rem !important;
+            font-weight: 600 !important;
+        }}
+
+        [data-testid="stSidebar"] [data-testid="baseButton-secondary"]:hover {{
+            border-color: rgba(168, 85, 247, 0.55) !important;
+            background: linear-gradient(
+                90deg,
+                rgba(34, 211, 238, 0.22),
+                rgba(168, 85, 247, 0.22)
+            ) !important;
+        }}
+
+        [data-testid="stSidebar"] [data-baseweb="slider"] {{
+            color: {TEXT_PRIMARY} !important;
+        }}
+
+        [data-baseweb="tab-list"] {{
+            gap: 0.35rem;
+            border-bottom: 1px solid {BORDER};
+        }}
+
+        [data-baseweb="tab"] {{
+            color: {TEXT_MUTED};
+            background: transparent;
+            border-radius: 0.9rem 0.9rem 0 0;
+            padding: 0.65rem 1rem;
+            font-weight: 600;
+        }}
+
+        [aria-selected="true"][data-baseweb="tab"] {{
+            color: {TEXT_PRIMARY};
+            background: linear-gradient(90deg, rgba(34, 211, 238, 0.13), rgba(168, 85, 247, 0.13));
+            border-bottom: 2px solid {CYAN};
+        }}
+
+        .hero-title {{
+            font-size: 2.25rem;
+            font-weight: 800;
+            letter-spacing: -0.04em;
+            line-height: 1.05;
+            margin: 0;
+            background: linear-gradient(90deg, {CYAN}, {PURPLE});
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }}
+
+        .hero-subtitle {{
+            color: {TEXT_MUTED};
+            margin-top: 0.35rem;
+            font-size: 0.93rem;
+            line-height: 1.6;
+        }}
+
+        .panel {{
+            background: {BG_PANEL};
+            border: 1px solid {BORDER};
+            border-radius: 1.1rem;
+            padding: 1rem 1.1rem;
+            position: relative;
+            overflow: hidden;
+        }}
+
+        .panel::before {{
+            content: "";
+            position: absolute;
+            inset: 0 0 auto 0;
+            height: 2px;
+            background: linear-gradient(90deg, {CYAN}, {PURPLE});
+            opacity: 0.95;
+        }}
+
+        .section-label {{
+            color: {TEXT_MUTED};
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            font-size: 0.72rem;
+            font-weight: 700;
+            margin-bottom: 0.7rem;
+        }}
+
+        .small-note {{
+            color: {TEXT_MUTED};
+            font-size: 0.86rem;
+            line-height: 1.6;
+        }}
+
+        [data-testid="stMetric"] {{
+            background: {BG_PANEL};
+            border: 1px solid {BORDER};
+            border-radius: 1rem;
+            padding: 0.8rem 0.9rem;
+        }}
+
+        [data-testid="stMetric"] label {{
+            color: {TEXT_MUTED} !important;
+        }}
+
+        [data-testid="stMetric"] [data-testid="stMetricValue"] {{
+            color: {TEXT_PRIMARY};
+        }}
+
+        [data-testid="stDownloadButton"] button {{
+            width: 100%;
+            background: linear-gradient(90deg, rgba(34, 211, 238, 0.12), rgba(168, 85, 247, 0.12));
+            color: {TEXT_PRIMARY};
+            border: 1px solid rgba(34, 211, 238, 0.25);
+            border-radius: 0.85rem;
+            transition: all 0.2s ease;
+        }}
+
+        [data-testid="stDownloadButton"] button:hover {{
+            transform: translateY(-2px);
+            border-color: rgba(168, 85, 247, 0.55);
+            box-shadow: 0 10px 24px rgba(168, 85, 247, 0.12);
+        }}
+
+        .tech-box {{
+            border: 1px solid {BORDER};
+            border-radius: 1rem;
+            padding: 0.8rem 0.95rem;
+            background: rgba(255, 255, 255, 0.025);
+        }}
+
+        .warning-box {{
+            border: 1px solid rgba(239, 68, 68, 0.28);
+            background: rgba(239, 68, 68, 0.08);
+            border-radius: 0.9rem;
+            padding: 0.8rem 0.95rem;
+            color: #fecaca;
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
 def to_grayscale_numpy(image: Image.Image) -> np.ndarray:
     rgb = np.array(image.convert("RGB"), dtype=np.float32)
