@@ -4,4 +4,4 @@ Pillow>=10.0.0
 scikit-image>=0.21.0
 matplotlib>=3.7.0
 pandas>=2.0.0
-7Y4W
+plotly>=5.22.0
