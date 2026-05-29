@@ -57,6 +57,7 @@ def inject_css() -> None:
         [data-testid="stSidebar"] {{
             background: {BG_SURFACE} !important;
             border-right: 1px solid {BORDER} !important;
+            min-width: 280px;
         }}
 
         [data-testid="stSidebar"] .block-container {{
@@ -97,37 +98,31 @@ def inject_css() -> None:
             transition: all 0.25s ease;
         }}
 
-        /* Hover uploader */
-            [data-testid="stSidebar"] [data-testid="stFileUploader"] section:hover {{
+        [data-testid="stSidebar"] [data-testid="stFileUploader"] section:hover {{
             border-color: rgba(168, 85, 247, 0.55) !important;
             background: rgba(17, 24, 39, 0.96) !important;
         }}
 
-        /* Tulisan uploader */
         [data-testid="stSidebar"] [data-testid="stFileUploader"] p,
         [data-testid="stSidebar"] [data-testid="stFileUploader"] span,
         [data-testid="stSidebar"] [data-testid="stFileUploader"] small {{
             color: #dbe7f5 !important;
         }}
 
-        /* Tombol browse/upload */
         [data-testid="stSidebar"] [data-testid="baseButton-secondary"] {{
             background: linear-gradient(
                 90deg,
                 rgba(34, 211, 238, 0.14),
                 rgba(168, 85, 247, 0.14)
             ) !important;
-
             border: 1px solid rgba(34, 211, 238, 0.22) !important;
             color: #f4f7fb !important;
             border-radius: 0.8rem !important;
             font-weight: 600 !important;
         }}
 
-        /* Hover tombol */
         [data-testid="stSidebar"] [data-testid="baseButton-secondary"]:hover {{
             border-color: rgba(168, 85, 247, 0.55) !important;
-
             background: linear-gradient(
                 90deg,
                 rgba(34, 211, 238, 0.22),
