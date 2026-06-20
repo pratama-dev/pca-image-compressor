@@ -44,8 +44,39 @@ def inject_css() -> None:
             color: {TEXT_PRIMARY} !important;
         }}
 
-        #MainMenu, footer, header {{
+        /* Sembunyikan menu hamburger (kanan atas) dan footer "Made with Streamlit" */
+        #MainMenu {{
             visibility: hidden;
+        }}
+
+        footer {{
+            visibility: hidden;
+        }}
+
+        /* PENTING: jangan set visibility:hidden pada <header>.
+           Tombol untuk membuka/menutup sidebar berada di dalam elemen ini.
+           Kalau header disembunyikan total, sidebar yang collapse (otomatis
+           terjadi di layar sempit/mobile) tidak bisa dibuka lagi sehingga
+           halaman terlihat seperti macet di tampilan awal saja. */
+        header[data-testid="stHeader"] {{
+            background: transparent !important;
+            box-shadow: none !important;
+        }}
+
+        /* Sembunyikan tombol Deploy & menu titik tiga di toolbar,
+           tapi toolbar-nya sendiri tetap ada (tidak mempengaruhi toggle sidebar) */
+        [data-testid="stToolbar"] {{
+            visibility: hidden;
+        }}
+
+        /* Pastikan tombol toggle sidebar SELALU terlihat dan bisa diklik,
+           terlepas dari override CSS lain di atas */
+        [data-testid="collapsedControl"],
+        [data-testid="stSidebarCollapsedControl"] {{
+            visibility: visible !important;
+            display: flex !important;
+            opacity: 1 !important;
+            z-index: 999999 !important;
         }}
 
         .block-container {{
